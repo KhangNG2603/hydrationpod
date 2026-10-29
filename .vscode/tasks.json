@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🚀 Start Wokwi & Open Dashboard",
+            "dependsOn": ["Open Web Dashboard"],
+            "type": "shell",
+            "command": "echo 'Wokwi Simulation & Web Dashboard ready!'",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Open Web Dashboard",
+            "type": "shell",
+            "command": "python3 -c 'import urllib.request, webbrowser, subprocess, time; exec(\"try:\\n  urllib.request.urlopen(\\\"http://localhost:8000\\\")\\nexcept:\\n  subprocess.Popen([\\\"python3\\\", \\\"-m\\\", \\\"http.server\\\", \\\"8000\\\", \\\"--directory\\\", \\\"dashboard\\\"])\\n  time.sleep(0.5)\\nwebbrowser.open(\\\"http://localhost:8000\\\")\")'",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        }
+    ]
+}

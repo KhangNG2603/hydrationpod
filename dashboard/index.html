@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Hydration Pod - No-Code IoT & Medical Monitoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Chart.js for History Line Chart (Lab 3 & BTVN 1) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- MQTT.js for direct WebSockets MQTT Broker connection (Lab 2 & Lab 5) -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header with System & Role Management -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">💧</div>
+        <div>
+          <h1>Smart Hydration Pod</h1>
+          <span class="sub-text">Hệ Thống Giám Sát & Điều Khiển Nạp Dịch (MQTT / No-Code IoT)</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <!-- Role Switcher (BTVN 3: User Management / Phân quyền đa người dùng) -->
+        <div class="role-selector" title="Phân quyền người dùng (BTVN 3)">
+          <span class="role-lbl">Vai Trò:</span>
+          <select id="user-role" onchange="switchRole(this.value)">
+            <option value="caregiver">👨‍⚕️ Bác Sĩ / Caregiver (Toàn Quyền)</option>
+            <option value="patient">👤 Bệnh Nhân (Chỉ Xem - Read Only)</option>
+          </select>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="status-pill" id="conn-pill">
+          <span class="dot" id="conn-dot"></span>
+          <span id="conn-text">MQTT: broker.emqx.io</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="grid">
+      <!-- Left Column: Gauge & Control Widgets -->
+      <div class="left-col">
+        <!-- Main Intake Gauge Card (Lab 2: Widget Gauge & Value Display) -->
+        <div class="card main-card">
+          <div class="card-header">
+            <div class="title-with-pin">
+              <h2>Tiến Độ Nạp Dịch Ngày</h2>
+              <span class="vpin-badge" title="Virtual Pin 0">V0</span>
+            </div>
+            <span class="tag tag-success" id="safety-tag">AN TOÀN</span>
+          </div>
+
+          <div class="gauge-box">
+            <div class="val-big" id="val-drank">400</div>
+            <div class="val-sub">/ <span id="val-goal">2000</span> ml</div>
+            <div class="val-pct" id="val-pct">20.0%</div>
+          </div>
+
+          <!-- Progress Bar & Dual Safety Markers (80% Yellow, 90% Red, 100% Emergency) -->
+          <div class="progress-wrap">
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill" style="width: 20%;"></div>
+            </div>
+            <div class="markers-row">
+              <span class="marker-item m-normal">🟢 0-80% An toàn</span>
+              <span class="marker-item m-warn">🟡 80% Tiệm cận</span>
+              <span class="marker-item m-danger">🔴 90% Nguy hiểm</span>
+              <span class="marker-item m-cap" id="label-cap-val">🚨 100% Trần</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Control Card: Switch, Slider, Profiles (Lab 4 & BTVN 2, 3) -->
+        <div class="card control-card" id="control-panel">
+          <div class="card-header">
+            <div class="title-with-pin">
+              <h2>Điều Khiển Chỉ Định Y Tế</h2>
+              <span class="vpin-badge" title="Virtual Pin 6: Cấu hình">V6</span>
+            </div>
+            <span class="lock-indicator" id="lock-badge" style="display: none;">🔒 Bị Khóa (Chế Độ Bệnh Nhân)</span>
+          </div>
+
+          <!-- Profile Buttons -->
+          <div class="control-group">
+            <label class="control-lbl">1. Chọn Profile Bệnh Lý:</label>
+            <div class="profile-options">
+              <button class="btn-opt active" id="btn-std" onclick="setProfile('STANDARD')">
+                <strong>👤 Chuẩn</strong>
+                <small>2000ml / ngày</small>
+              </button>
+              <button class="btn-opt" id="btn-heart" onclick="setProfile('HEART_FAILURE')">
+                <strong>🫀 Suy Tim</strong>
+                <small>1000ml Trần Cứng</small>
+              </button>
+              <button class="btn-opt" id="btn-gout" onclick="setProfile('GOUT')">
+                <strong>💧 Sỏi Thận</strong>
+                <small>2500ml Tăng Cường</small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Slider: Adjust Hard Cap (Lab 4: Widget Slider) -->
+          <div class="control-group slider-group">
+            <div class="slider-header">
+              <label class="control-lbl">2. Hạn Mức Trần Y Tế (Hard Cap $V_{cap}$):</label>
+              <span class="slider-val" id="slider-val-txt">1000 ml</span>
+            </div>
+            <input type="range" min="500" max="2500" step="50" value="1000" id="cap-slider" oninput="onCapSliderChange(this.value)">
+          </div>
+
+          <!-- Switch & Buttons: Mute / Reset (Lab 4: Widget Switch & Button) -->
+          <div class="control-row">
+            <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()">
+              <span class="btn-icon">🔕</span> <span id="txt-mute">Tắt Còi Báo Động</span>
+              <span class="vpin-badge-inline" title="Virtual Pin 7">V7</span>
+            </button>
+            <button class="btn-action btn-reset" onclick="resetDay()">
+              <span class="btn-icon">🔄</span> Reset Ngày
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Metrics, Charts, LED & Event Log -->
+      <div class="right-col">
+        <!-- Quick Stats Grid (Virtual Pins V1, V3, V5) -->
+        <div class="stats-row">
+          <div class="card stat-card">
+            <div class="stat-top">
+              <span class="stat-lbl">Nước Trong Bình</span>
+              <span class="vpin-badge" title="Virtual Pin 1">V1</span>
+            </div>
+            <div class="stat-val" id="val-bottle">500 <small>ml</small></div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-top">
+              <span class="stat-lbl">Thời Gian Nhàn Rỗi</span>
+              <span class="vpin-badge" title="Virtual Pin 3">V3</span>
+            </div>
+            <div class="stat-val" id="val-idle">12 <small>giây</small></div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-top">
+              <span class="stat-lbl">Dung Lượng Pin (ADC)</span>
+              <span class="vpin-badge" title="Virtual Pin 5">V5</span>
+            </div>
+            <div class="stat-val" id="val-bat">85 <small>%</small></div>
+          </div>
+        </div>
+
+        <!-- History Line Chart Card (Lab 3 & BTVN 1: Widget History Chart) -->
+        <div class="card chart-card">
+          <div class="card-header">
+            <div class="title-with-pin">
+              <h2>Biểu Đồ Biến Động Nạp Dịch (History Chart)</h2>
+              <span class="chart-timeframe">Thời gian thực (Live)</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="intakeChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Test Scenarios & LED Ring -->
+        <div class="card test-card">
+          <div class="test-top">
+            <h2>Kịch Bản Kiểm Thử Nhanh (Demo)</h2>
+            <div class="ring-mini">
+              <span>Đèn Đáy Bình (WS2812B):</span>
+              <div class="led-ring" id="led-ring">
+                <div class="dot led-0"></div><div class="dot led-1"></div>
+                <div class="dot led-2"></div><div class="dot led-3"></div>
+                <div class="dot led-4"></div><div class="dot led-5"></div>
+                <div class="dot led-6"></div><div class="dot led-7"></div>
+              </div>
+            </div>
+          </div>
+          <div class="demo-grid">
+            <button class="btn-demo btn-d1" onclick="runDemo(1)">
+              <strong>1. Uống Hợp Lệ</strong>
+              <small>+150ml nước</small>
+            </button>
+            <button class="btn-demo btn-d2" onclick="runDemo(2)">
+              <strong>2. Quên Uống (35s)</strong>
+              <small>Nháy Cam + Còi</small>
+            </button>
+            <button class="btn-demo btn-d3" onclick="runDemo(3)">
+              <strong>3. Vượt Trần Y Tế</strong>
+              <small>1050/1000ml Báo Động</small>
+            </button>
+          </div>
+        </div>
+
+        <!-- Event Log & Feedback Loop ACK Widget (BTVN 2 & BTVN 3) -->
+        <div class="card log-card">
+          <div class="card-header">
+            <div class="title-with-pin">
+              <h2>Nhật Ký Sự Kiện & Phản Hồi ACK (Feedback Loop)</h2>
+            </div>
+            <button class="btn-clear-log" onclick="clearLog()">Xóa</button>
+          </div>
+          <div class="log-box" id="log-box">
+            <div class="log-line info">[SẴN SÀNG] Hệ thống Smart Hydration Pod khởi tạo kết nối MQTT.</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Emergency Modal Pop-up (Biên an toàn kép - BTVN 2) -->
+    <div class="modal" id="modal">
+      <div class="modal-content">
+        <div class="siren">🚨</div>
+        <h2>BÁO ĐỘNG KHẨN CẤP Y TẾ</h2>
+        <p class="modal-desc">Bệnh nhân đã vượt trần nạp dịch cho phép!</p>
+        <div class="modal-stats">
+          <div>Đã nạp: <strong id="m-drank">1050</strong> ml</div>
+          <div>Hạn mức tối đa: <strong id="m-cap">1000</strong> ml</div>
+        </div>
+        <p class="modal-note">⚠️ Yêu cầu Bác sĩ / Điều dưỡng can thiệp ngay lập tức!</p>
+        <button class="btn-ack" onclick="ackEmergency()">ĐÃ XÁC NHẬN CAN THIỆP</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

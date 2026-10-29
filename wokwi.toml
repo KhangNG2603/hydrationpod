@@ -1,0 +1,7 @@
+[wokwi]
+version = 1
+firmware = ".pio/build/az-delivery-devkit-v4/firmware.bin"
+elf = ".pio/build/az-delivery-devkit-v4/firmware.elf"
+
+[serial]
+rfc2217 = 4000
