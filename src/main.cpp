@@ -858,6 +858,9 @@ void sendTelemetryJSON() {
   String output;
   serializeJson(doc, output);
 
+  Serial.print(F("[TELEMETRY_JSON] "));
+  Serial.println(output);
+
   if (mqttClient.connected()) {
     mqttClient.publish(TOPIC_TELEMETRY, output.c_str());
   }

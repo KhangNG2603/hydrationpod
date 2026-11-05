@@ -9,6 +9,7 @@ Smart Hydration Pod - Postman-Friendly HTTP REST API & MQTT Bridge Server
 
 import http.server
 import socketserver
+import socket
 import json
 import time
 import os
@@ -86,14 +87,70 @@ def evaluate_safety():
     else:
         latest_telemetry["safety_status"] = "NORMAL"
 
+wokwi_socket = None
+wokwi_lock = threading.Lock()
+
+def send_to_wokwi(text):
+    global wokwi_socket
+    with wokwi_lock:
+        if wokwi_socket:
+            try:
+                wokwi_socket.sendall(text.encode('utf-8') + b'\n')
+            except Exception:
+                pass
+
+def wokwi_serial_bridge_thread():
+    global wokwi_socket, latest_telemetry
+    while True:
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2.0)
+            s.connect(("127.0.0.1", 4000))
+            print("🟢 [Wokwi Bridge] Connected to Wokwi ESP32 Serial at localhost:4000!")
+            with wokwi_lock:
+                wokwi_socket = s
+            s.settimeout(None)
+            buffer = ""
+            while True:
+                data = s.recv(1024)
+                if not data:
+                    break
+                buffer += data.decode('utf-8', errors='ignore')
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if "[TELEMETRY_JSON]" in line:
+                        json_str = line.split("[TELEMETRY_JSON]", 1)[1].strip()
+                        try:
+                            t_data = json.loads(json_str)
+                            for k, v in t_data.items():
+                                latest_telemetry[k] = v
+                            broadcast_sse(latest_telemetry)
+                            print(f"🔄 [Wokwi Serial Telemetry]: Drank={t_data.get('drank_today_ml')}ml, Bottle={t_data.get('bottle_ml')}ml")
+                        except Exception:
+                            pass
+                    elif "[SENSOR DRINK DETECTED]" in line:
+                        print(f"🌊 [Wokwi Sensor Event]: {line}")
+                        latest_telemetry['last_event'] = line
+                        broadcast_sse(latest_telemetry)
+        except Exception:
+            with wokwi_lock:
+                wokwi_socket = None
+            if s:
+                try: s.close()
+                except Exception: pass
+            time.sleep(2.0)
+
 def publish_to_mqtt(payload_dict):
     global mqtt_client
+    payload_str = json.dumps(payload_dict)
     if mqtt_client and mqtt_client.is_connected():
-        payload_str = json.dumps(payload_dict)
         print(f"📡 [MQTT Pub -> ESP32] Topic: {TOPIC_CONTROL} | Payload: {payload_str}")
         mqtt_client.publish(TOPIC_CONTROL, payload_str)
     else:
-        print("⚠️ [MQTT] Client not connected, command handled locally only.")
+        print("⚠️ [MQTT] Client not connected, command handled locally/serial.")
+    send_to_wokwi(payload_str)
 
 # --- MQTT SETUP ---
 def on_mqtt_connect(client, userdata, flags, rc, properties=None):
@@ -415,15 +472,24 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(response_data, indent=2).encode('utf-8'))
 
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
 def run_server():
     start_mqtt_client()
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), PostmanAPIHandler) as httpd:
+    
+    # Start Wokwi RFC2217 background bridge
+    w_thread = threading.Thread(target=wokwi_serial_bridge_thread, daemon=True)
+    w_thread.start()
+
+    with ThreadedHTTPServer(("", PORT), PostmanAPIHandler) as httpd:
         print(f"\n==================================================================")
         print(f"🟢 [Smart Hydration Pod Server] Running at: http://localhost:{PORT}")
         print(f"👉 API Docs & Endpoints: http://localhost:{PORT}/api/help")
         print(f"👉 Web Dashboard:        http://localhost:{PORT}")
         print(f"👉 Public MQTT Broker:   {MQTT_BROKER}:{MQTT_PORT}")
+        print(f"👉 Wokwi Serial Bridge:  localhost:4000 (Auto-connecting)")
         print(f"==================================================================\n")
         httpd.serve_forever()
 
