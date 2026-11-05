@@ -414,11 +414,6 @@ void readSensors() {
       float sum = 0;
       for (int i = 0; i < count; i++) sum += samples[i];
       current_weight_g = sum / count;
-
-      // Update current bottle remaining if resting stable
-      if (!is_moving) {
-        current_bottle_ml = current_weight_g;
-      }
     }
   }
 }
@@ -472,12 +467,12 @@ void processFSM() {
           float drank = delta_w;
           total_drank_today_ml += drank;
           hourly_intake_ml += drank;
-          current_bottle_ml = new_weight_g;
+          current_bottle_ml = max(0.0f, current_bottle_ml - drank);
           last_intake_timestamp = millis();
 
           lastEventLog = "Sensor Drink: +" + String((int)drank) + "ml";
-          Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml)\n", 
-                        (int)drank, (int)total_drank_today_ml);
+          Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml, Bottle Remaining: %d ml)\n", 
+                        (int)drank, (int)total_drank_today_ml, (int)current_bottle_ml);
 
           // Visual & Audio Confirmation + Haptic Click Confirmation
           setPixelColorAll(pixels.Color(0, 255, 0)); // Green ring
@@ -491,7 +486,7 @@ void processFSM() {
         // CASE 2: Refill Event (Water poured into bottle, weight increased by >= 40g)
         else if (delta_w <= -40.0) {
           float refilled = -delta_w;
-          current_bottle_ml = new_weight_g;
+          current_bottle_ml = min(1000.0f, current_bottle_ml + refilled);
           lastEventLog = "Sensor Refill: +" + String((int)refilled) + "ml";
           Serial.printf("🔵 [SENSOR REFILL DETECTED] Refilled: +%d ml (New Bottle: %d ml)\n",
                         (int)refilled, (int)current_bottle_ml);
