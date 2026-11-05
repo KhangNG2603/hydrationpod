@@ -328,6 +328,18 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
                 return
 
+        # 7. Serve Flutter Patient Mobile App Emulator
+        elif self.path in ['/mobile', '/mobile/', '/app', '/patient']:
+            mobile_file = os.path.join(DIRECTORY, 'mobile.html')
+            if os.path.exists(mobile_file):
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self._send_cors_headers()
+                self.end_headers()
+                with open(mobile_file, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+
         super().do_GET()
 
     def do_POST(self):

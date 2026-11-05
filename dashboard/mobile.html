@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>HydraPod Patient App — Flutter Mobile Emulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root {
+      --bg-outer: #06090f;
+      --bg-app: #0B0F17;
+      --bg-card: #111927;
+      --bg-elevated: #182334;
+      --border: #1E293B;
+      --text-main: #F8FAFC;
+      --text-sub: #94A3B8;
+      --text-muted: #64748B;
+      --accent: #0EA5E9;
+      --accent-light: #38BDF8;
+      --green: #10B981;
+      --amber: #F59E0B;
+      --red: #EF4444;
+      --rose: #F43F5E;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: radial-gradient(circle at 50% 0%, #0f1b2d 0%, var(--bg-outer) 70%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    /* Top Emulator Toolbar (Desktop only) */
+    .emulator-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 420px;
+      margin-bottom: 12px;
+      padding: 8px 14px;
+      background: rgba(17, 25, 39, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    .emulator-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-light);
+    }
+
+    .flutter-badge {
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: var(--accent-light);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+    }
+
+    .back-link {
+      color: var(--text-sub);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s;
+    }
+    .back-link:hover {
+      color: var(--text-main);
+    }
+
+    /* Phone Device Frame */
+    .phone-frame {
+      width: 100%;
+      max-width: 412px;
+      height: 840px;
+      max-height: calc(100vh - 76px);
+      background: var(--bg-app);
+      border-radius: 42px;
+      border: 10px solid #1E293B;
+      box-shadow:
+        0 25px 60px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 0 20px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 0;
+        background: var(--bg-app);
+      }
+      .emulator-bar {
+        display: none;
+      }
+      .phone-frame {
+        max-width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border: none;
+        border-radius: 0;
+      }
+    }
+
+    /* iOS/Android Status Bar */
+    .status-bar {
+      height: 34px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-sub);
+      flex-shrink: 0;
+    }
+
+    .notch {
+      width: 96px;
+      height: 18px;
+      background: #06090f;
+      border-radius: 12px;
+    }
+
+    /* Flutter AppBar */
+    .app-bar {
+      padding: 12px 18px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .app-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-light);
+    }
+
+    .app-title {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+
+    .app-subtitle {
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .conn-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.14);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Scrollable App Content */
+    .app-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .app-body::-webkit-scrollbar {
+      width: 4px;
+    }
+    .app-body::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+
+    /* Contextual Alert Banners */
+    .banner {
+      display: none;
+      padding: 14px;
+      border-radius: 16px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .banner-emergency {
+      background: #450A0A;
+      border: 1.5px solid var(--red);
+      color: #FECACA;
+    }
+
+    .banner-empty {
+      background: rgba(136, 19, 55, 0.35);
+      border: 1.5px solid var(--rose);
+      color: #FDA4AF;
+    }
+
+    .banner-idle {
+      background: #451A03;
+      border: 1.5px solid var(--amber);
+      color: #FDE68A;
+    }
+
+    .banner-title {
+      font-weight: 800;
+      font-size: 13px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .banner-btn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: none;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--red);
+      color: #fff;
+    }
+
+    /* Hero Hydration Ring Card */
+    .hero-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hero-top {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .rx-badge {
+      background: var(--bg-elevated);
+      border: 1px solid #26354D;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #E2E8F0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .safety-chip {
+      padding: 4px 9px;
+      border-radius: 8px;
+      font-size: 10.5px;
+      font-weight: 800;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      white-space: nowrap;
+    }
+
+    /* SVG Circular Progress */
+    .ring-wrap {
+      position: relative;
+      width: 176px;
+      height: 176px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ring-svg {
+      transform: rotate(-90deg);
+      width: 176px;
+      height: 176px;
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: #1E293B;
+      stroke-width: 13;
+    }
+
+    .ring-fg {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 13;
+      stroke-linecap: round;
+      stroke-dasharray: 465;
+      stroke-dashoffset: 465;
+      transition: stroke-dashoffset 0.6s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s ease;
+    }
+
+    .ring-center {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .drank-num {
+      font-family: var(--font-mono);
+      font-size: 38px;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1;
+    }
+
+    .target-num {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+
+    .pct-pill {
+      margin-top: 6px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 700;
+      background: rgba(14, 165, 233, 0.15);
+      color: var(--accent-light);
+    }
+
+    .remaining-text {
+      margin-top: 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-sub);
+      text-align: center;
+    }
+
+    /* Hardware 3-Column Metrics */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 11px 8px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .metric-val {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .metric-lbl {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* Visual Water Bottle Card */
+    .bottle-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: border-color 0.25s ease;
+    }
+
+    .bottle-card.empty-alert {
+      border-color: var(--rose);
+      box-shadow: 0 0 20px rgba(244, 63, 94, 0.15);
+    }
+
+    .vessel-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 68px;
+      flex-shrink: 0;
+    }
+
+    .vessel-cap {
+      width: 30px;
+      height: 9px;
+      background: #334155;
+      border: 1px solid #475569;
+      border-radius: 4px 4px 1px 1px;
+      margin-bottom: 2px;
+    }
+
+    .vessel-body {
+      width: 62px;
+      height: 120px;
+      background: #070A10;
+      border: 2px solid #334155;
+      border-radius: 10px 10px 16px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .vessel-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
+      transition: height 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .vessel-fill.low {
+      background: linear-gradient(180deg, #F43F5E 0%, #BE123C 100%);
+    }
+
+    .vessel-ticks {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      align-items: flex-end;
+      padding-right: 4px;
+      pointer-events: none;
+    }
+
+    .vessel-ticks span {
+      font-family: var(--font-mono);
+      font-size: 8px;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    .bottle-info {
+      flex: 1;
+    }
+
+    .bottle-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(14, 165, 233, 0.14);
+      color: var(--accent-light);
+      margin-bottom: 6px;
+    }
+
+    .bottle-tag.low {
+      background: rgba(244, 63, 94, 0.18);
+      color: var(--rose);
+    }
+
+    .bottle-vol {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .bottle-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Quick Actions Card */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 15px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      margin-bottom: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .m-btn {
+      padding: 12px 10px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.12s ease, opacity 0.15s;
+    }
+    .m-btn:active {
+      transform: scale(0.97);
+    }
+
+    .m-btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+    }
+
+    .m-btn-refill {
+      background: rgba(14, 165, 233, 0.12);
+      color: var(--accent-light);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .m-btn-vibe {
+      background: rgba(245, 158, 11, 0.12);
+      color: #FBBF24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .m-btn-mute {
+      background: rgba(239, 68, 68, 0.12);
+      color: #F87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    /* Ringtone Chips */
+    .tone-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .tone-chip {
+      padding: 7px 11px;
+      border-radius: 10px;
+      background: var(--bg-app);
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tone-chip.active {
+      background: rgba(14, 165, 233, 0.2);
+      border-color: var(--accent-light);
+      color: var(--accent-light);
+    }
+
+    .mp3-upload-bar {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .btn-mp3-mini {
+      padding: 6px 11px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid #334155;
+      color: var(--text-main);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Bottom Home Indicator */
+    .home-indicator {
+      height: 22px;
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .home-bar {
+      width: 120px;
+      height: 4px;
+      border-radius: 4px;
+      background: #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Emulator Bar -->
+  <div class="emulator-bar">
+    <div class="emulator-bar-left">
+      <span>📱 HydraPod Patient Mobile</span>
+      <span class="flutter-badge">Flutter / Dart UI</span>
+    </div>
+    <a href="/" class="back-link">← Về Dashboard Bác Sĩ</a>
+  </div>
+
+  <!-- Smartphone Frame -->
+  <div class="phone-frame">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span id="clock-txt">09:41</span>
+      <div class="notch"></div>
+      <span id="bat-top">🔋 85%</span>
+    </div>
+
+    <!-- Flutter AppBar -->
+    <div class="app-bar">
+      <div class="app-brand">
+        <div class="app-logo">💧</div>
+        <div>
+          <div class="app-title">HydraPod Patient</div>
+          <div class="app-subtitle">Trợ lý nhắc uống nước cá nhân</div>
+        </div>
+      </div>
+      <div class="conn-pill" id="conn-pill">
+        <span class="conn-dot"></span>
+        <span id="conn-txt">MQTT Live</span>
+      </div>
+    </div>
+
+    <!-- Scrollable Screen Content -->
+    <div class="app-body">
+      <!-- 1. Contextual Alert Banners -->
+      <div class="banner banner-emergency" id="banner-emergency">
+        <div class="banner-title">🚨 CẢNH BÁO: ĐÃ VƯỢT TRẦN NẠP DỊCH Y TẾ!</div>
+        <div id="emergency-desc">Bạn đã vượt giới hạn nước chỉ định của Bác sĩ. Vui lòng ngưng uống thêm nước!</div>
+        <button class="banner-btn" onclick="ackEmergency()">Đã hiểu &amp; Tắt còi báo động</button>
+      </div>
+
+      <div class="banner banner-empty" id="banner-empty">
+        <div class="banner-title">⚠️ BÌNH NƯỚC ĐÃ CẠN (≤ 40ml)</div>
+        <div>Hãy châm thêm nước vào bình để cảm biến HX711 tiếp tục theo dõi.</div>
+      </div>
+
+      <div class="banner banner-idle" id="banner-idle">
+        <div class="banner-title">🔔 ĐẾN GIỜ UỐNG NƯỚC RỒI!</div>
+        <div id="idle-desc">Bạn đã quên uống nước. Hãy uống một ngụm nhỏ nhé!</div>
+      </div>
+
+      <!-- 2. Hero Daily Hydration Ring -->
+      <div class="hero-card">
+        <div class="hero-top">
+          <div class="rx-badge" id="rx-badge">🩺 Phác đồ Tiêu Chuẩn (2000 ml)</div>
+          <div class="safety-chip" id="safety-chip">AN TOÀN</div>
+        </div>
+
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 176 176">
+            <circle class="ring-bg" cx="88" cy="88" r="74"></circle>
+            <circle class="ring-fg" id="ring-fg" cx="88" cy="88" r="74"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="drank-num" id="drank-val">0</div>
+            <div class="target-num">/ <span id="target-val">2000</span> ml</div>
+            <div class="pct-pill" id="pct-val">0.0%</div>
+          </div>
+        </div>
+
+        <div class="remaining-text" id="remaining-txt">
+          Còn có thể nạp an toàn hôm nay: 2000 ml
+        </div>
+      </div>
+
+      <!-- 3. Hardware Metrics Strip -->
+      <div class="metrics-row">
+        <div class="metric-box">
+          <div class="metric-val" id="idle-val">0s</div>
+          <div class="metric-lbl">Chưa uống (V3)</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-val" id="vibe-val">Sẵn sàng</div>
+          <div class="metric-lbl">Mô-tơ Rung</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-val" id="bat-val">85%</div>
+          <div class="metric-lbl">Pin bình (V5)</div>
+        </div>
+      </div>
+
+      <!-- 4. Visual Water Bottle (HX711) -->
+      <div class="bottle-card" id="bottle-card">
+        <div class="vessel-wrap">
+          <div class="vessel-cap"></div>
+          <div class="vessel-body">
+            <div class="vessel-fill" id="vessel-fill" style="height: 100%;"></div>
+            <div class="vessel-ticks">
+              <span>400</span>
+              <span>250</span>
+              <span>100</span>
+            </div>
+          </div>
+        </div>
+        <div class="bottle-info">
+          <span class="bottle-tag" id="bottle-tag">CẢM BIẾN HX711 (V1)</span>
+          <div style="font-size: 12px; color: var(--text-sub);">Nước còn trong bình</div>
+          <div>
+            <span class="bottle-vol" id="bottle-val">500</span>
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 700;">/ 500 ml</span>
+          </div>
+          <div class="bottle-sub" id="bottle-sub">Đủ cho khoảng 4 lần uống (150ml/lần)</div>
+        </div>
+      </div>
+
+      <!-- 5. Patient Quick Actions -->
+      <div class="section-card">
+        <div class="section-label">
+          <span>Thao Tác Của Bệnh Nhân</span>
+          <span style="color: var(--accent-light); font-family: var(--font-mono); font-size: 10px;">IoT Sync</span>
+        </div>
+        <div class="actions-grid">
+          <button class="m-btn m-btn-primary" onclick="drinkWater(150)">
+            💧 Uống +150ml
+          </button>
+          <button class="m-btn m-btn-refill" onclick="refillBottle(350)">
+            🚰 Châm +350ml
+          </button>
+          <button class="m-btn m-btn-vibe" onclick="testVibration()">
+            📳 Tìm bình (Rung)
+          </button>
+          <button class="m-btn m-btn-mute" onclick="ackEmergency()">
+            🔕 Tắt còi nhắc
+          </button>
+        </div>
+      </div>
+
+      <!-- 6. Personal Ringtone Selector -->
+      <div class="section-card">
+        <div class="section-label">
+          <span>Kiểu Chuông Nhắc Uống Nước</span>
+          <span id="tone-preview-btn" onclick="previewTone()" style="color: var(--accent-light); cursor: pointer;">🔊 Nghe thử</span>
+        </div>
+        <div class="tone-chips">
+          <button class="tone-chip active" id="chip-CHIME" onclick="selectTone('CHIME')">🔔 Chuông Đôi</button>
+          <button class="tone-chip" id="chip-MELODIC" onclick="selectTone('MELODIC')">🎵 Giai Điệu</button>
+          <button class="tone-chip" id="chip-DIGITAL" onclick="selectTone('DIGITAL')">📟 Bíp Y Tế</button>
+          <button class="tone-chip" id="chip-SIREN" onclick="selectTone('SIREN')">🚨 Còi Khẩn</button>
+          <button class="tone-chip" id="chip-CUSTOM" onclick="selectTone('CUSTOM')">🎧 Nhạc MP3</button>
+        </div>
+        <div class="mp3-upload-bar">
+          <span id="mp3-status" style="font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            Tải file .mp3 cá nhân làm chuông báo
+          </span>
+          <label for="mp3-input" class="btn-mp3-mini">📂 Chọn .MP3</label>
+          <input type="file" id="mp3-input" accept=".mp3,audio/mpeg" style="display:none" onchange="uploadMp3(event)" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Home Bar -->
+    <div class="home-indicator">
+      <div class="home-bar"></div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      drank: 0,
+      bottle: 500,
+      goal: 2000,
+      cap: 0,
+      idle: 0,
+      bat: 85,
+      safety: 'SAFE_GREEN',
+      alert_level: 0,
+      profile: 'STANDARD',
+      ringtone: localStorage.getItem('hydropod_ringtone') || 'CHIME',
+      vibe: false,
+      is_empty: false,
+      custom_mp3_name: localStorage.getItem('hydropod_mp3_name') || '',
+      has_custom_mp3: false
+    };
+
+    let audioCtx = null;
+    let customAudio = null;
+
+    function playTone(style) {
+      if (style === 'CUSTOM') {
+        const src = localStorage.getItem('hydropod_mp3_data') || '/custom_alarm.mp3';
+        if (!customAudio || customAudio.src !== src) {
+          customAudio = new Audio(src);
+        }
+        customAudio.currentTime = 0;
+        customAudio.play().catch(() => {});
+        return;
+      }
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+        const note = (freq, start, dur) => {
+          const osc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          osc.frequency.setValueAtTime(freq, start);
+          g.gain.setValueAtTime(0.15, start);
+          g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+          osc.connect(g);
+          g.connect(audioCtx.destination);
+          osc.start(start);
+          osc.stop(start + dur);
+        };
+        if (style === 'MELODIC') {
+          note(523, now, 0.12); note(659, now + 0.13, 0.12); note(784, now + 0.26, 0.18);
+        } else if (style === 'DIGITAL') {
+          note(2400, now, 0.08); note(2400, now + 0.12, 0.08);
+        } else if (style === 'SIREN') {
+          note(880, now, 0.18); note(1760, now + 0.18, 0.2);
+        } else {
+          note(784, now, 0.14); note(1046, now + 0.16, 0.22);
+        }
+      } catch (e) {}
+    }
+
+    function applyTelemetry(d) {
+      if (d.drank_today_ml !== undefined) state.drank = d.drank_today_ml;
+      if (d.bottle_ml !== undefined) state.bottle = d.bottle_ml;
+      if (d.goal_ml !== undefined) state.goal = d.goal_ml;
+      if (d.hard_cap_ml !== undefined) state.cap = d.hard_cap_ml;
+      if (d.idle_sec !== undefined) state.idle = d.idle_sec;
+      if (d.battery_soc !== undefined) state.bat = d.battery_soc;
+      if (d.safety_status !== undefined) state.safety = d.safety_status;
+      if (d.alert_level !== undefined) state.alert_level = d.alert_level;
+      if (d.profile !== undefined) state.profile = d.profile;
+      if (d.ringtone !== undefined) state.ringtone = d.ringtone;
+      if (d.vibration_active !== undefined) state.vibe = d.vibration_active;
+      state.is_empty = d.is_empty !== undefined ? d.is_empty : (state.bottle <= 40);
+      if (d.custom_mp3_name) state.custom_mp3_name = d.custom_mp3_name;
+      renderUI();
+    }
+
+    function renderUI() {
+      const target = state.cap > 0 ? state.cap : (state.goal > 0 ? state.goal : 2000);
+      const pct = Math.min(200, (state.drank / target) * 100);
+      const isOvercap = state.safety === 'EMERGENCY_OVERCAP' || (state.cap > 0 && state.drank >= state.cap);
+
+      document.getElementById('drank-val').innerText = Math.round(state.drank);
+      document.getElementById('target-val').innerText = Math.round(target);
+      document.getElementById('pct-val').innerText = pct.toFixed(1) + '%';
+
+      // Progress Ring SVG (Circumference = 2 * pi * 74 = 465)
+      const ringFg = document.getElementById('ring-fg');
+      const offset = 465 - (Math.min(100, pct) / 100) * 465;
+      ringFg.style.strokeDashoffset = offset;
+
+      const chip = document.getElementById('safety-chip');
+      if (isOvercap) {
+        ringFg.style.stroke = '#EF4444';
+        chip.innerText = 'VƯỢT TRẦN Y TẾ';
+        chip.style.background = 'rgba(239,68,68,0.2)';
+        chip.style.color = '#F87171';
+      } else if (state.safety === 'DANGER_RED' || pct >= 90) {
+        ringFg.style.stroke = '#F97316';
+        chip.innerText = 'NGUY HIỂM (90%)';
+        chip.style.background = 'rgba(249,115,22,0.2)';
+        chip.style.color = '#FB923C';
+      } else if (state.safety === 'APPROACH_YELLOW' || pct >= 80) {
+        ringFg.style.stroke = '#F59E0B';
+        chip.innerText = 'TIỆM CẬN (80%)';
+        chip.style.background = 'rgba(245,158,11,0.2)';
+        chip.style.color = '#FBBF24';
+      } else {
+        ringFg.style.stroke = '#0EA5E9';
+        chip.innerText = 'AN TOÀN';
+        chip.style.background = 'rgba(16,185,129,0.15)';
+        chip.style.color = '#10B981';
+      }
+
+      // Profile Badge
+      const rx = document.getElementById('rx-badge');
+      if (state.profile === 'HEART_FAILURE') {
+        rx.innerText = `❤️ Phác đồ Suy Tim (Trần ${Math.round(state.cap)}ml)`;
+      } else if (state.profile === 'GOUT') {
+        rx.innerText = `💧 Phác đồ Sỏi Thận (${Math.round(state.goal)}ml)`;
+      } else {
+        rx.innerText = `🩺 Phác đồ Tiêu Chuẩn (${Math.round(state.goal)}ml)`;
+      }
+
+      const rem = Math.max(0, Math.round(target - state.drank));
+      const remTxt = document.getElementById('remaining-txt');
+      remTxt.innerText = isOvercap
+        ? '⚠️ Đã vượt hạn mức trần y tế! Tuyệt đối không uống thêm.'
+        : `Còn có thể nạp an toàn hôm nay: ${rem} ml`;
+      remTxt.style.color = isOvercap ? '#F87171' : '#94A3B8';
+
+      // Banners
+      document.getElementById('banner-emergency').style.display = isOvercap ? 'block' : 'none';
+      document.getElementById('banner-empty').style.display = (!isOvercap && state.is_empty) ? 'block' : 'none';
+      document.getElementById('banner-idle').style.display = (!isOvercap && !state.is_empty && state.alert_level >= 1) ? 'block' : 'none';
+      if (state.alert_level >= 1) {
+        document.getElementById('idle-desc').innerText =
+          `Đã ${state.idle} giây bạn chưa uống nước (Nhắc nhở cấp ${state.alert_level}). Hãy uống 1 ngụm nhỏ nhé!`;
+      }
+
+      // Metrics
+      document.getElementById('idle-val').innerText = state.idle + 's';
+      document.getElementById('vibe-val').innerText = state.vibe ? 'Đang rung' : 'Sẵn sàng';
+      document.getElementById('bat-val').innerText = state.bat + '%';
+      document.getElementById('bat-top').innerText = '🔋 ' + state.bat + '%';
+
+      // Bottle
+      const bPct = Math.max(0, Math.min(100, (state.bottle / 500) * 100));
+      const fill = document.getElementById('vessel-fill');
+      fill.style.height = bPct + '%';
+      fill.classList.toggle('low', state.is_empty);
+      document.getElementById('bottle-card').classList.toggle('empty-alert', state.is_empty);
+      const bTag = document.getElementById('bottle-tag');
+      bTag.innerText = state.is_empty ? '⚠️ SẮP CẠN BÌNH!' : 'CẢM BIẾN HX711 (V1)';
+      bTag.classList.toggle('low', state.is_empty);
+      document.getElementById('bottle-val').innerText = Math.round(state.bottle);
+      document.getElementById('bottle-sub').innerText = state.is_empty
+        ? 'Hãy bấm "Châm +350ml" để tiếp tục uống!'
+        : `Đủ cho khoảng ${Math.ceil(state.bottle / 150)} lần uống (150ml/lần)`;
+
+      // Ringtone chips
+      ['CHIME', 'MELODIC', 'DIGITAL', 'SIREN', 'CUSTOM'].forEach(t => {
+        const el = document.getElementById('chip-' + t);
+        if (el) el.classList.toggle('active', state.ringtone === t);
+      });
+      if (state.custom_mp3_name) {
+        document.getElementById('mp3-status').innerText = '🎵 Đang dùng: ' + state.custom_mp3_name;
+      }
+    }
+
+    async function drinkWater(amt) {
+      playTone(state.ringtone);
+      await fetch('/api/drink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount_ml: amt })
+      });
+    }
+
+    async function refillBottle(amt) {
+      await fetch('/api/refill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount_ml: amt })
+      });
+    }
+
+    async function testVibration() {
+      await fetch('/api/vibrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration_ms: 300 })
+      });
+    }
+
+    async function ackEmergency() {
+      if (customAudio) customAudio.pause();
+      await fetch('/api/alarm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'MUTE' })
+      });
+    }
+
+    async function selectTone(tone) {
+      state.ringtone = tone;
+      localStorage.setItem('hydropod_ringtone', tone);
+      playTone(tone);
+      renderUI();
+      await fetch('/api/ringtone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ringtone: tone })
+      });
+    }
+
+    function previewTone() {
+      playTone(state.ringtone);
+    }
+
+    function uploadMp3(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target.result;
+        localStorage.setItem('hydropod_mp3_data', dataUrl);
+        localStorage.setItem('hydropod_mp3_name', file.name);
+        state.custom_mp3_name = file.name;
+        await fetch('/api/upload_audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, data: dataUrl })
+        });
+        selectTone('CUSTOM');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Real-time SSE connection to server.py
+    const evtSource = new EventSource('/events');
+    evtSource.onmessage = (e) => {
+      try { applyTelemetry(JSON.parse(e.data)); } catch (_) {}
+    };
+
+    // Update clock
+    setInterval(() => {
+      const d = new Date();
+      document.getElementById('clock-txt').innerText =
+        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }, 10000);
+  </script>
+</body>
+</html>
