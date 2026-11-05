@@ -15,6 +15,7 @@ import time
 import os
 import threading
 import sys
+import base64
 
 # Try importing paho.mqtt.client
 try:
@@ -49,6 +50,8 @@ latest_telemetry = {
     "profile": "STANDARD",
     "vibration_motor": 0,
     "ringtone": "CHIME",
+    "has_custom_mp3": os.path.exists(os.path.join(DIRECTORY, 'custom_alarm.mp3')),
+    "custom_mp3_name": "custom_alarm.mp3" if os.path.exists(os.path.join(DIRECTORY, 'custom_alarm.mp3')) else "",
     "wifi_connected": True,
     "wifi_rssi": -45,
     "uptime_sec": 0,
@@ -471,7 +474,36 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             broadcast_sse(latest_telemetry)
             response_data = {"status": "success", "ringtone": r_tone, "mqtt_published": True}
 
-        # 8. POST /api/reset
+        # 8. POST /api/upload_audio (Upload custom .mp3 file)
+        elif self.path.startswith('/api/upload_audio'):
+            try:
+                data_b64 = body_json.get('data', '')
+                filename = body_json.get('filename', 'custom_alarm.mp3')
+                if data_b64:
+                    if ',' in data_b64:
+                        data_b64 = data_b64.split(',', 1)[1]
+                    audio_bytes = base64.b64decode(data_b64)
+                    save_path = os.path.join(DIRECTORY, 'custom_alarm.mp3')
+                    with open(save_path, 'wb') as f:
+                        f.write(audio_bytes)
+                    latest_telemetry['ringtone'] = 'CUSTOM'
+                    latest_telemetry['has_custom_mp3'] = True
+                    latest_telemetry['custom_mp3_name'] = filename
+                    latest_telemetry['last_event'] = f"Uploaded MP3: {filename}"
+                    publish_to_mqtt({"target": "ringtone", "tone": "CUSTOM", "filename": filename})
+                    broadcast_sse(latest_telemetry)
+                    response_data = {
+                        "status": "success",
+                        "message": f"Saved {filename} ({len(audio_bytes)} bytes)",
+                        "url": "/custom_alarm.mp3",
+                        "ringtone": "CUSTOM"
+                    }
+                else:
+                    response_data = {"status": "error", "message": "No audio data provided"}
+            except Exception as e:
+                response_data = {"status": "error", "message": str(e)}
+
+        # 9. POST /api/reset
         elif self.path.startswith('/api/reset'):
             latest_telemetry['drank_today_ml'] = 0
             latest_telemetry['bottle_ml'] = 500

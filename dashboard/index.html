@@ -204,7 +204,29 @@
                   <small>Siren dồn dập</small>
                 </span>
               </button>
+              <button class="btn-tone" id="tone-custom" onclick="selectRingtone('CUSTOM')">
+                <span class="tone-icon">🎵</span>
+                <span class="tone-info">
+                  <strong>Tùy Chỉnh (MP3)</strong>
+                  <small id="custom-mp3-label">File người dùng</small>
+                </span>
+              </button>
             </div>
+
+            <!-- MP3 Upload Input & Actions -->
+            <div class="mp3-upload-bar">
+              <input type="file" id="mp3-file-input" accept=".mp3,audio/mpeg,audio/mp3,audio/*" style="display: none;" onchange="handleMp3Upload(event)">
+              <button class="btn-upload-mp3" onclick="document.getElementById('mp3-file-input').click()" title="Chọn file .mp3 từ máy tính của bạn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Tải File .MP3 Lên</span>
+              </button>
+              <span class="mp3-filename" id="mp3-display-name">Chưa chọn file MP3</span>
+            </div>
+            <audio id="custom-audio-player" preload="auto"></audio>
           </div>
 
           <!-- Interactive Action Buttons -->

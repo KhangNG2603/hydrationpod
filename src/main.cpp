@@ -85,7 +85,8 @@ enum RingtoneStyle {
   RINGTONE_CHIME = 0,    // Chuông đôi nhẹ nhàng (G5 -> C6)
   RINGTONE_MELODIC,      // Giai điệu du dương (C5 -> E5 -> G5)
   RINGTONE_DIGITAL,      // Tiếng Beep điện tử đanh thép (2093Hz)
-  RINGTONE_SIREN         // Còi cấp cứu y tế dồn dập (1500Hz - 2500Hz)
+  RINGTONE_SIREN,        // Còi cấp cứu y tế dồn dập (1500Hz - 2500Hz)
+  RINGTONE_CUSTOM        // Âm thanh MP3 tùy chỉnh người dùng tải lên
 };
 
 RingtoneStyle currentRingtone = RINGTONE_CHIME;
@@ -731,6 +732,7 @@ void playBuzzerTone(const char* event_type) {
     }
   } else if (strcmp(event_type, "PREVIEW") == 0) {
     switch (currentRingtone) {
+      case RINGTONE_CUSTOM:  tone(BUZZER_PIN, 1175, 250); break;
       case RINGTONE_MELODIC: tone(BUZZER_PIN, 659, 150); break;
       case RINGTONE_DIGITAL: tone(BUZZER_PIN, 2093, 120); break;
       case RINGTONE_SIREN:   tone(BUZZER_PIN, 1800, 200); break;
@@ -944,7 +946,8 @@ void sendTelemetryJSON() {
   doc["vibration_motor"] = is_vibrating ? 1 : 0;
   doc["ringtone"] = (currentRingtone == RINGTONE_MELODIC ? "MELODIC" :
                     (currentRingtone == RINGTONE_DIGITAL ? "DIGITAL" :
-                    (currentRingtone == RINGTONE_SIREN ? "SIREN" : "CHIME")));
+                    (currentRingtone == RINGTONE_SIREN ? "SIREN" :
+                    (currentRingtone == RINGTONE_CUSTOM ? "CUSTOM" : "CHIME"))));
   doc["is_empty"] = (current_bottle_ml <= 40.0f);
   doc["goal_reached"] = (goal_ml > 0 && total_drank_today_ml >= goal_ml);
   doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
@@ -1065,6 +1068,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (r_tone.equalsIgnoreCase("MELODIC")) currentRingtone = RINGTONE_MELODIC;
     else if (r_tone.equalsIgnoreCase("DIGITAL")) currentRingtone = RINGTONE_DIGITAL;
     else if (r_tone.equalsIgnoreCase("SIREN")) currentRingtone = RINGTONE_SIREN;
+    else if (r_tone.equalsIgnoreCase("CUSTOM")) currentRingtone = RINGTONE_CUSTOM;
     else currentRingtone = RINGTONE_CHIME;
 
     lastEventLog = "Ringtone: " + r_tone;

@@ -16,7 +16,9 @@ let state = {
   is_mqtt_connected: false,
   is_emergency_acked: false,
   has_alerted_empty: false,
-  ringtone: 'CHIME'
+  ringtone: localStorage.getItem('hydropod_ringtone') || 'CHIME',
+  custom_mp3_data: localStorage.getItem('hydropod_custom_mp3') || '',
+  custom_mp3_name: localStorage.getItem('hydropod_custom_mp3_name') || ''
 };
 
 // Audio Synthesizer
@@ -27,6 +29,13 @@ function initAudio() {
 
 function playTone(freq, type = 'sine', dur = 0.15) {
   if (state.is_alarm_muted) return;
+
+  // If user selected Custom MP3 and file is loaded, play MP3
+  if (state.ringtone === 'CUSTOM' && (state.custom_mp3_data || state.has_custom_mp3)) {
+    playRingtoneMelody('CUSTOM');
+    return;
+  }
+
   try {
     initAudio();
     if (!audioCtx) return;
@@ -45,6 +54,26 @@ function playTone(freq, type = 'sine', dur = 0.15) {
 
 // Play distinctive melody based on chosen ringtone style
 function playRingtoneMelody(style) {
+  if (state.is_alarm_muted) return;
+
+  // Custom MP3 audio playback
+  if (style === 'CUSTOM') {
+    const audioPlayer = document.getElementById('custom-audio-player');
+    if (audioPlayer) {
+      if (state.custom_mp3_data) {
+        audioPlayer.src = state.custom_mp3_data;
+      } else {
+        audioPlayer.src = '/custom_alarm.mp3';
+      }
+      audioPlayer.currentTime = 0;
+      audioPlayer.play().catch(e => {
+        console.warn('Custom MP3 audio play failed, falling back to chime:', e);
+        playTone(1046, 'sine', 0.25);
+      });
+      return;
+    }
+  }
+
   try {
     initAudio();
     if (!audioCtx) return;
@@ -420,10 +449,19 @@ function updateUI() {
     'CHIME': 'tone-chime',
     'MELODIC': 'tone-melodic',
     'DIGITAL': 'tone-digital',
-    'SIREN': 'tone-siren'
+    'SIREN': 'tone-siren',
+    'CUSTOM': 'tone-custom'
   };
   const activeToneBtn = document.getElementById(toneMap[state.ringtone] || 'tone-chime');
   if (activeToneBtn) activeToneBtn.classList.add('active');
+
+  // Update Custom MP3 filename labels
+  const mp3Lbl = document.getElementById('custom-mp3-label');
+  const mp3Disp = document.getElementById('mp3-display-name');
+  if (state.custom_mp3_name) {
+    if (mp3Lbl) mp3Lbl.innerText = state.custom_mp3_name;
+    if (mp3Disp) mp3Disp.innerText = '🎵 ' + state.custom_mp3_name;
+  }
 
   updateLEDs();
 }
@@ -554,6 +592,7 @@ function refillBottle(amount = 350) {
 // --- RINGTONE STYLE HANDLERS (Tùy biến tiếng chuông) ---
 function selectRingtone(tone) {
   state.ringtone = tone;
+  localStorage.setItem('hydropod_ringtone', tone);
   updateUI();
   playRingtoneMelody(tone);
   log(`🔔 [ĐỔI TIẾNG CHUÔNG]: Đã đổi kiểu chuông sang ${tone}`, 'info');
@@ -564,6 +603,42 @@ function previewSelectedRingtone() {
   playRingtoneMelody(state.ringtone);
   log(`🔊 [NGHE THỬ CHUÔNG]: Đang phát chuông ${state.ringtone}...`, 'info');
   sendCommand({ target: 'ringtone', tone: state.ringtone, preview: true });
+}
+
+// Upload & Process Custom MP3 Audio File
+function handleMp3Upload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.includes('audio') && !file.name.toLowerCase().endsWith('.mp3')) {
+    alert('Vui lòng chọn file âm thanh có định dạng .mp3!');
+    return;
+  }
+
+  log(`⏳ [TẢI ÂM THANH]: Đang xử lý file ${file.name} (${Math.round(file.size / 1024)} KB)...`, 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    state.custom_mp3_data = dataUrl;
+    state.custom_mp3_name = file.name;
+    localStorage.setItem('hydropod_custom_mp3', dataUrl);
+    localStorage.setItem('hydropod_custom_mp3_name', file.name);
+
+    // Upload to local server.py
+    fetch('/api/upload_audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, data: dataUrl })
+    }).then(res => res.json()).then(res => {
+      log(`✅ [ĐÃ LƯU MP3]: File ${file.name} đã được lưu làm chuông báo động!`, 'ack');
+    }).catch(() => {
+      log(`ℹ️ [LƯU CỤC BỘ]: File ${file.name} đã được lưu trên trình duyệt!`, 'info');
+    });
+
+    selectRingtone('CUSTOM');
+  };
+  reader.readAsDataURL(file);
 }
 
 // --- DEMO SCENARIOS ---
