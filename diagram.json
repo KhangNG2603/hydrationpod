@@ -3,72 +3,78 @@
   "author": "Smart Hydration Pod - Sensor-Driven IoT",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
     {
       "type": "wokwi-ssd1306",
       "id": "oled",
-      "top": -200,
+      "top": -220,
       "left": -90,
       "attrs": { "i2cAddress": "0x3c" }
     },
     {
       "type": "wokwi-mpu6050",
       "id": "mpu",
-      "top": -200,
-      "left": 150,
+      "top": -220,
+      "left": 160,
       "attrs": {}
     },
     {
       "type": "wokwi-hx711",
       "id": "hx711",
-      "top": 70,
-      "left": -270,
+      "top": 60,
+      "left": -320,
       "attrs": { "type": "5kg" }
     },
     {
       "type": "wokwi-led",
       "id": "motor1",
       "top": 20,
-      "left": 160,
+      "left": 180,
       "attrs": { "color": "orange", "label": "VIBRATION MOTOR" }
     },
     {
       "type": "wokwi-buzzer",
       "id": "bz1",
       "top": 110,
-      "left": 160,
+      "left": 180,
       "attrs": { "volume": "0.1" }
     },
     {
       "type": "wokwi-neopixel-ring",
       "id": "ring1",
       "top": 220,
-      "left": 150,
+      "left": 170,
       "attrs": { "pixels": "8" }
     }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
     [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "oled:VCC", "esp:3V3", "red", [ "v-25", "h-60", "v240", "h70" ] ],
+    [ "oled:GND", "esp:GND.1", "black", [ "v-35", "h-50", "v230", "h60" ] ],
     [ "esp:21", "oled:SDA", "green", [ "v-30", "h-70" ] ],
     [ "esp:22", "oled:SCL", "blue", [ "v-40", "h-60" ] ],
-    [ "oled:GND", "esp:GND.1", "black", [ "v30", "h-30" ] ],
-    [ "oled:VCC", "esp:3V3", "red", [ "v40", "h-40" ] ],
+    [ "mpu:VCC", "esp:3V3", "red", [ "v-45", "h-260", "v240", "h70" ] ],
+    [ "mpu:GND", "esp:GND.2", "black", [ "v-30", "h30", "v220", "h-80" ] ],
     [ "esp:21", "mpu:SDA", "green", [ "v-20", "h90" ] ],
     [ "esp:22", "mpu:SCL", "blue", [ "v-30", "h100" ] ],
-    [ "mpu:GND", "esp:GND.2", "black", [ "v30", "h-90" ] ],
-    [ "mpu:VCC", "esp:3V3", "red", [ "v20", "h-150" ] ],
-    [ "esp:16", "hx711:DT", "purple", [ "v20", "h-160" ] ],
-    [ "esp:17", "hx711:SCK", "orange", [ "v10", "h-150" ] ],
-    [ "hx711:GND", "esp:GND.1", "black", [ "v-30", "h80" ] ],
-    [ "hx711:VCC", "esp:3V3", "red", [ "v-40", "h70" ] ],
-    [ "esp:5", "motor1:A", "orange", [ "h40" ] ],
+    [ "hx711:VCC", "esp:3V3", "red", [ "h-20", "v-80", "h270" ] ],
+    [ "hx711:GND", "esp:GND.1", "black", [ "h-30", "v-70", "h280" ] ],
+    [ "esp:16", "hx711:DT", "purple", [ "v30", "h-180" ] ],
+    [ "esp:17", "hx711:SCK", "orange", [ "v20", "h-170" ] ],
+    [ "esp:5", "motor1:A", "orange", [ "h35" ] ],
     [ "motor1:C", "esp:GND.2", "black", [ "h20", "v-30", "h-130" ] ],
-    [ "esp:4", "bz1:1", "red", [ "h40" ] ],
+    [ "esp:4", "bz1:1", "red", [ "h35" ] ],
     [ "bz1:2", "esp:GND.2", "black", [ "h20", "v-120", "h-130" ] ],
-    [ "esp:15", "ring1:DIN", "yellow", [ "h40" ] ],
+    [ "esp:15", "ring1:DIN", "yellow", [ "h35" ] ],
     [ "ring1:GND", "esp:GND.2", "black", [ "h20", "v-230", "h-130" ] ],
-    [ "ring1:VCC", "esp:5V", "red", [ "v30", "h-150" ] ]
+    [ "ring1:VCC", "esp:5V", "red", [ "v40", "h-170" ] ]
   ],
   "dependencies": {}
 }
