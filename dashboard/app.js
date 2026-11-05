@@ -245,16 +245,46 @@ function updateUI() {
   document.getElementById('val-idle').innerHTML = `${state.idle_sec} <small>giây</small>`;
   document.getElementById('val-bat').innerHTML = `${state.battery_soc} <small>%</small>`;
 
+  // Visual Water Reservoir Animation (HX711 Load Cell)
+  const resFluid = document.getElementById('res-fluid');
+  if (resFluid) {
+    const fluidPct = Math.max(0, Math.min(100, (state.bottle / 500) * 100));
+    resFluid.style.height = fluidPct + '%';
+    if (state.bottle <= 40) {
+      resFluid.style.background = 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)';
+    } else {
+      resFluid.style.background = 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)';
+    }
+  }
+
+  // Battery bar fill
+  const batFill = document.getElementById('bat-fill');
+  if (batFill) {
+    batFill.style.width = Math.max(0, Math.min(100, state.battery_soc)) + '%';
+    batFill.style.background = state.battery_soc > 20 ? 'var(--green)' : 'var(--red)';
+  }
+
+  // Idle status text
+  const idleInfo = document.getElementById('idle-status-text');
+  if (idleInfo) {
+    if (state.alert_level === 3) idleInfo.innerText = '🔴 Quá hạn nghiêm trọng';
+    else if (state.alert_level === 2) idleInfo.innerText = '🟡 Cảnh báo Cấp 2';
+    else if (state.alert_level === 1) idleInfo.innerText = '🔵 Nhắc nhở Cấp 1';
+    else idleInfo.innerText = '🟢 Hoạt động bình thường';
+  }
+
+  // Haptic Vibration Card Visualizer
   const vibeEl = document.getElementById('val-vibe');
-  if (vibeEl) {
+  const vibeCard = document.getElementById('card-vibe');
+  if (vibeEl && vibeCard) {
     if (state.vibration_motor === 1 || state.vibration_motor === true) {
-      vibeEl.innerText = 'Đang rung';
-      vibeEl.style.color = '#f97316';
-      vibeEl.classList.add('vibrating');
+      vibeEl.innerText = 'Đang Rung 📳';
+      vibeEl.style.color = '#f59e0b';
+      vibeCard.classList.add('vibrating');
     } else {
       vibeEl.innerText = 'Sẵn sàng';
-      vibeEl.style.color = 'var(--text-sub)';
-      vibeEl.classList.remove('vibrating');
+      vibeEl.style.color = '#fff';
+      vibeCard.classList.remove('vibrating');
     }
   }
 
@@ -430,6 +460,16 @@ function testVibration() {
   log('📳 [CLOUD LỆNH]: Kích hoạt kiểm thử bộ rung xúc giác (300ms)...', 'info');
   playTone(800, 'sine', 0.12);
   sendCommand({ target: 'vibrate', duration_ms: 300 });
+}
+
+function refillBottle(amount = 350) {
+  state.bottle = Math.min(500, state.bottle + amount);
+  state.has_alerted_empty = false;
+  log(`💧 [CHÂM NƯỚC]: Đã nạp thêm +${amount}ml nước vào bình (Tổng bình: ${Math.round(state.bottle)}ml).`, 'info');
+  playTone(900, 'sine', 0.15);
+  setTimeout(() => playTone(1200, 'sine', 0.2), 150);
+  sendCommand({ target: 'refill', amount: amount });
+  updateUI();
 }
 
 // --- DEMO SCENARIOS ---

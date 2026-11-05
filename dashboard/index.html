@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Hydration Pod - No-Code IoT & Medical Monitoring</title>
+  <title>Smart Hydration Pod - IoT & Medical Telemetry Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Chart.js for History Line Chart (Lab 3 & BTVN 1) -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Chart.js for History Line Chart -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- MQTT.js for direct WebSockets MQTT Broker connection (Lab 2 & Lab 5) -->
+  <!-- MQTT.js for direct WebSockets MQTT Broker connection -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -18,10 +18,17 @@
     <!-- Header with System & Role Management -->
     <header class="header">
       <div class="brand">
-        <div class="brand-icon">💧</div>
+        <div class="brand-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+          </svg>
+        </div>
         <div>
-          <h1>Smart Hydration Pod</h1>
-          <span class="sub-text">Hệ Thống Giám Sát & Điều Khiển Nạp Dịch (MQTT / No-Code IoT)</span>
+          <div class="brand-title-wrap">
+            <h1>Smart Hydration Pod</h1>
+            <span class="system-badge">v2.5 IoT Cloud</span>
+          </div>
+          <span class="sub-text">Hệ Thống Giám Sát Y Tế & Điều Khiển Nạp Dịch (ESP32 + MQTT + Haptic Engine)</span>
         </div>
       </div>
 
@@ -36,11 +43,14 @@
         </div>
 
         <!-- API Tester Link -->
-        <a href="/docs" target="_blank" style="text-decoration: none; display: flex; align-items: center; gap: 6px; background: rgba(2, 132, 199, 0.15); border: 1px solid rgba(2, 132, 199, 0.4); color: #38bdf8; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; transition: all 0.2s;" title="Mở Web Postman / API Tester">
-          <span>🚀 Web Postman / Docs</span>
+        <a href="/docs" target="_blank" class="btn-api-docs" title="Mở Web Postman & Tài liệu API">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>Web Postman / API</span>
         </a>
 
-        <!-- Connection Status -->
+        <!-- Connection Status Indicator -->
         <div class="status-pill" id="conn-pill">
           <span class="dot" id="conn-dot"></span>
           <span id="conn-text">MQTT: broker.emqx.io</span>
@@ -50,22 +60,46 @@
 
     <!-- Main Grid Layout -->
     <main class="grid">
-      <!-- Left Column: Gauge & Control Widgets -->
+      <!-- Left Column: Gauge, Water Level Reservoir & Control Widgets -->
       <div class="left-col">
         <!-- Main Intake Gauge Card (Lab 2: Widget Gauge & Value Display) -->
-        <div class="card main-card">
+        <div class="card gauge-card">
           <div class="card-header">
             <div class="title-with-pin">
               <h2>Tiến Độ Nạp Dịch Ngày</h2>
-              <span class="vpin-badge" title="Virtual Pin 0">V0</span>
+              <span class="vpin-badge" title="Virtual Pin 0: Lượng nước đã uống">V0</span>
             </div>
-            <span class="tag tag-success" id="safety-tag">AN TOÀN</span>
+            <div class="tag-group">
+              <span class="tag tag-success" id="safety-tag">🟢 AN TOÀN</span>
+              <span class="tag tag-goal" id="goal-badge" style="display: none;">🎉 ĐẠT 100% MỤC TIÊU</span>
+            </div>
           </div>
 
-          <div class="gauge-box">
-            <div class="val-big" id="val-drank">400</div>
-            <div class="val-sub">/ <span id="val-goal">2000</span> ml</div>
-            <div class="val-pct" id="val-pct">20.0%</div>
+          <div class="gauge-display-row">
+            <div class="gauge-box">
+              <div class="val-big-wrap">
+                <span class="val-big" id="val-drank">400</span>
+                <span class="val-sub">/ <span id="val-goal">2000</span> ml</span>
+              </div>
+              <div class="val-pct-badge" id="val-pct">20.0%</div>
+            </div>
+
+            <!-- Visual Water Reservoir (Mô hình bình nước 500ml trực quan) -->
+            <div class="reservoir-box" title="Mực nước còn lại trong bình (HX711 Load Cell)">
+              <div class="reservoir-cylinder">
+                <div class="reservoir-fluid" id="res-fluid" style="height: 100%;">
+                  <div class="reservoir-wave"></div>
+                </div>
+                <div class="reservoir-ticks">
+                  <span>500</span>
+                  <span>375</span>
+                  <span>250</span>
+                  <span>125</span>
+                  <span>0</span>
+                </div>
+              </div>
+              <div class="reservoir-lbl">Bình 500ml</div>
+            </div>
           </div>
 
           <!-- Progress Bar & Dual Safety Markers (80% Yellow, 90% Red, 100% Emergency) -->
@@ -77,36 +111,45 @@
               <span class="marker-item m-normal">🟢 0-80% An toàn</span>
               <span class="marker-item m-warn">🟡 80% Tiệm cận</span>
               <span class="marker-item m-danger">🔴 90% Nguy hiểm</span>
-              <span class="marker-item m-cap" id="label-cap-val">🚨 100% Trần</span>
+              <span class="marker-item m-cap" id="label-cap-val">🚨 100% Hạn Mức</span>
             </div>
           </div>
         </div>
 
-        <!-- Control Card: Switch, Slider, Profiles (Lab 4 & BTVN 2, 3) -->
+        <!-- Control Card: Profiles, Slider & Actions (Lab 4 & BTVN 2, 3) -->
         <div class="card control-card" id="control-panel">
           <div class="card-header">
             <div class="title-with-pin">
               <h2>Điều Khiển Chỉ Định Y Tế</h2>
-              <span class="vpin-badge" title="Virtual Pin 6: Cấu hình">V6</span>
+              <span class="vpin-badge" title="Virtual Pin 6: Cấu hình phác đồ">V6</span>
             </div>
-            <span class="lock-indicator" id="lock-badge" style="display: none;">🔒 Bị Khóa (Chế Độ Bệnh Nhân)</span>
+            <span class="lock-indicator" id="lock-badge" style="display: none;">🔒 Chế Độ Bệnh Nhân (Khóa Cấu Hình)</span>
           </div>
 
           <!-- Profile Buttons -->
           <div class="control-group">
-            <label class="control-lbl">1. Chọn Profile Bệnh Lý:</label>
-            <div class="profile-options">
+            <label class="control-lbl">1. Chỉ Định Phác Đồ Bệnh Lý:</label>
+            <div class="profile-grid">
               <button class="btn-opt active" id="btn-std" onclick="setProfile('STANDARD')">
-                <strong>👤 Chuẩn</strong>
-                <small>2000ml / ngày</small>
+                <span class="opt-icon">👤</span>
+                <span class="opt-content">
+                  <strong>Chuẩn</strong>
+                  <small>2000ml / ngày (Nhắc 60p)</small>
+                </span>
               </button>
               <button class="btn-opt" id="btn-heart" onclick="setProfile('HEART_FAILURE')">
-                <strong>🫀 Suy Tim</strong>
-                <small>1000ml Trần Cứng</small>
+                <span class="opt-icon">🫀</span>
+                <span class="opt-content">
+                  <strong>Suy Tim / Thận</strong>
+                  <small>1000ml Trần Cứng (Nhắc 45p)</small>
+                </span>
               </button>
               <button class="btn-opt" id="btn-gout" onclick="setProfile('GOUT')">
-                <strong>💧 Sỏi Thận</strong>
-                <small>2500ml Tăng Cường</small>
+                <span class="opt-icon">💧</span>
+                <span class="opt-content">
+                  <strong>Sỏi Thận / Gout</strong>
+                  <small>2500ml Tăng Cường (Nhắc 30p)</small>
+                </span>
               </button>
             </div>
           </div>
@@ -114,23 +157,47 @@
           <!-- Slider: Adjust Hard Cap (Lab 4: Widget Slider) -->
           <div class="control-group slider-group">
             <div class="slider-header">
-              <label class="control-lbl">2. Hạn Mức Trần Y Tế (Hard Cap $V_{cap}$):</label>
+              <label class="control-lbl">2. Hạn Mức Trần Y Tế (Hard Cap V<sub>cap</sub>):</label>
               <span class="slider-val" id="slider-val-txt">1000 ml</span>
             </div>
             <input type="range" min="500" max="2500" step="50" value="1000" id="cap-slider" oninput="onCapSliderChange(this.value)">
           </div>
 
-          <!-- Switch & Buttons: Mute / Vibrate Test / Reset (Lab 4: Widget Switch & Button) -->
-          <div class="control-row">
-            <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()">
-              <span class="btn-icon">🔕</span> <span id="txt-mute">Tắt Còi</span>
-              <span class="vpin-badge-inline" title="Virtual Pin 7">V7</span>
+          <!-- Interactive Action Buttons -->
+          <div class="control-actions-grid">
+            <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()" title="Bật/Tắt còi báo động khẩn cấp (Virtual Pin 7)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <line x1="23" y1="9" x2="17" y2="15"></line>
+                <line x1="17" y1="9" x2="23" y2="15"></line>
+              </svg>
+              <span id="txt-mute">Tắt Còi</span>
+              <span class="vpin-badge-inline">V7</span>
             </button>
-            <button class="btn-action btn-vibe" id="btn-vibe" onclick="testVibration()" title="Kiểm thử bộ rung nhắc nhở qua Cloud">
-              <span class="btn-icon">📳</span> <span>Test Rung</span>
+
+            <button class="btn-action btn-vibe" id="btn-vibe" onclick="testVibration()" title="Kích hoạt xung rung xúc giác 300ms qua Cloud MQTT">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+                <line x1="1" y1="9" x2="1" y2="15"></line>
+                <line x1="23" y1="9" x2="23" y2="15"></line>
+              </svg>
+              <span>Test Rung (GPIO 5)</span>
             </button>
-            <button class="btn-action btn-reset" onclick="resetDay()">
-              <span class="btn-icon">🔄</span> Reset
+
+            <button class="btn-action btn-refill" onclick="refillBottle(350)" title="Mô phỏng châm thêm nước vào bình">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+              <span>Châm Nước (+350ml)</span>
+            </button>
+
+            <button class="btn-action btn-reset" onclick="resetDay()" title="Đặt lại toàn bộ chỉ số nạp dịch trong ngày">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path>
+              </svg>
+              <span>Reset Ngày</span>
             </button>
           </div>
         </div>
@@ -143,31 +210,41 @@
           <div class="card stat-card" id="card-bottle">
             <div class="stat-top">
               <span class="stat-lbl">Nước Trong Bình</span>
-              <span class="vpin-badge" title="Virtual Pin 1">V1</span>
+              <span class="vpin-badge" title="Virtual Pin 1: Load Cell HX711">V1</span>
             </div>
             <div class="stat-val" id="val-bottle">500 <small>ml</small></div>
-            <div id="bottle-refill-badge" style="display: none; font-size: 11px; font-weight: 700; color: #f59e0b; margin-top: 4px; animation: pulse 1.5s infinite;">⚠️ CẠN NƯỚC: HÃY CHÂM THÊM</div>
+            <div id="bottle-refill-badge" class="alert-pulse-badge" style="display: none;">⚠️ CẠN NƯỚC: HÃY CHÂM THÊM</div>
           </div>
+
           <div class="card stat-card">
             <div class="stat-top">
               <span class="stat-lbl">Thời Gian Nhàn Rỗi</span>
-              <span class="vpin-badge" title="Virtual Pin 3">V3</span>
+              <span class="vpin-badge" title="Virtual Pin 3: Bộ đếm Idle FSM">V3</span>
             </div>
             <div class="stat-val" id="val-idle">12 <small>giây</small></div>
+            <div class="stat-sub-info" id="idle-status-text">Hoạt động bình thường</div>
           </div>
+
           <div class="card stat-card">
             <div class="stat-top">
               <span class="stat-lbl">Dung Lượng Pin (ADC)</span>
-              <span class="vpin-badge" title="Virtual Pin 5">V5</span>
+              <span class="vpin-badge" title="Virtual Pin 5: Cảm biến điện áp pin">V5</span>
             </div>
             <div class="stat-val" id="val-bat">85 <small>%</small></div>
+            <div class="battery-bar-wrap">
+              <div class="battery-bar-fill" id="bat-fill" style="width: 85%;"></div>
+            </div>
           </div>
+
           <div class="card stat-card" id="card-vibe">
             <div class="stat-top">
-              <span class="stat-lbl">Bộ Rung Nhắc Nhở</span>
-              <span class="vpin-badge" title="Bộ rung Haptic ESP32">Haptic</span>
+              <span class="stat-lbl">Bộ Rung Xúc Giác</span>
+              <span class="vpin-badge" title="Động cơ Haptic GPIO 5">Haptic</span>
             </div>
-            <div class="stat-val" id="val-vibe" style="color: var(--text-sub);">Sẵn sàng</div>
+            <div class="stat-val" id="val-vibe">Sẵn sàng</div>
+            <div class="haptic-pulse-indicator" id="haptic-indicator">
+              <span></span><span></span><span></span>
+            </div>
           </div>
         </div>
 
@@ -175,8 +252,11 @@
         <div class="card chart-card">
           <div class="card-header">
             <div class="title-with-pin">
-              <h2>Biểu Đồ Biến Động Nạp Dịch (History Chart)</h2>
-              <span class="chart-timeframe">Thời gian thực (Live)</span>
+              <h2>Biểu Đồ Lũy Kế Nạp Dịch (History Chart)</h2>
+              <span class="chart-timeframe">Đồng bộ Cloud thời gian thực</span>
+            </div>
+            <div class="chart-legend-badge">
+              <span class="legend-dot"></span> Lượng Nước Đã Nạp (V0)
             </div>
           </div>
           <div class="chart-container">
@@ -187,9 +267,11 @@
         <!-- Test Scenarios & LED Ring -->
         <div class="card test-card">
           <div class="test-top">
-            <h2>Kịch Bản Kiểm Thử Nhanh (Demo)</h2>
+            <div class="title-with-pin">
+              <h2>Kịch Bản Kiểm Thử Nhanh (Demo Scenarios)</h2>
+            </div>
             <div class="ring-mini">
-              <span>Đèn Đáy Bình (WS2812B):</span>
+              <span class="ring-title">Đèn Đáy Bình (WS2812B):</span>
               <div class="led-ring" id="led-ring">
                 <div class="dot led-0"></div><div class="dot led-1"></div>
                 <div class="dot led-2"></div><div class="dot led-3"></div>
@@ -200,16 +282,19 @@
           </div>
           <div class="demo-grid">
             <button class="btn-demo btn-d1" onclick="runDemo(1)">
-              <strong>1. Uống Hợp Lệ</strong>
-              <small>+150ml nước</small>
+              <div class="demo-badge">DEMO 1</div>
+              <strong>Uống Hợp Lệ (+150ml)</strong>
+              <small>FSM Tilt &gt; 35°, Trừ bình, Click rung 90ms</small>
             </button>
             <button class="btn-demo btn-d2" onclick="runDemo(2)">
-              <strong>2. Quên Uống (35s)</strong>
-              <small>Nháy Cam + Còi</small>
+              <div class="demo-badge">DEMO 2</div>
+              <strong>Quên Uống Nước (35s)</strong>
+              <small>Cảnh báo Cấp 2: Rung đôi + Còi nhịp</small>
             </button>
             <button class="btn-demo btn-d3" onclick="runDemo(3)">
-              <strong>3. Vượt Trần Y Tế</strong>
-              <small>1050/1000ml Báo Động</small>
+              <div class="demo-badge">DEMO 3</div>
+              <strong>Vượt Trần Y Tế (1050ml)</strong>
+              <small>Báo động khẩn cấp + Modal can thiệp</small>
             </button>
           </div>
         </div>
@@ -218,12 +303,12 @@
         <div class="card log-card">
           <div class="card-header">
             <div class="title-with-pin">
-              <h2>Nhật Ký Sự Kiện & Phản Hồi ACK (Feedback Loop)</h2>
+              <h2>Nhật Ký Sự Kiện & Phản Hồi ACK (Cloud Feedback Loop)</h2>
             </div>
-            <button class="btn-clear-log" onclick="clearLog()">Xóa</button>
+            <button class="btn-clear-log" onclick="clearLog()">Xóa Log</button>
           </div>
           <div class="log-box" id="log-box">
-            <div class="log-line info">[SẴN SÀNG] Hệ thống Smart Hydration Pod khởi tạo kết nối MQTT.</div>
+            <div class="log-line info">[SẴN SÀNG] Hệ thống Smart Hydration Pod khởi tạo kết nối Cloud MQTT & Local Wokwi Bridge.</div>
           </div>
         </div>
       </div>
@@ -234,13 +319,20 @@
       <div class="modal-content">
         <div class="siren">🚨</div>
         <h2>BÁO ĐỘNG KHẨN CẤP Y TẾ</h2>
-        <p class="modal-desc">Bệnh nhân đã vượt trần nạp dịch cho phép!</p>
+        <p class="modal-desc">Bệnh nhân đã vượt trần nạp dịch cho phép (Hard Cap Safe Margin)!</p>
         <div class="modal-stats">
-          <div>Đã nạp: <strong id="m-drank">1050</strong> ml</div>
-          <div>Hạn mức tối đa: <strong id="m-cap">1000</strong> ml</div>
+          <div class="modal-stat-box">
+            <span>ĐÃ NẠP</span>
+            <strong id="m-drank">1050</strong> ml
+          </div>
+          <div class="modal-stat-divider">&gt;</div>
+          <div class="modal-stat-box highlight">
+            <span>HẠN MỨC TRẦN</span>
+            <strong id="m-cap">1000</strong> ml
+          </div>
         </div>
-        <p class="modal-note">⚠️ Yêu cầu Bác sĩ / Điều dưỡng can thiệp ngay lập tức!</p>
-        <button class="btn-ack" onclick="ackEmergency()">ĐÃ XÁC NHẬN CAN THIỆP</button>
+        <p class="modal-note">⚠️ Yêu cầu Bác sĩ / Điều dưỡng can thiệp lâm sàng ngay lập tức!</p>
+        <button class="btn-ack" onclick="ackEmergency()">ĐÃ XÁC NHẬN CAN THIỆP Y TẾ</button>
       </div>
     </div>
   </div>

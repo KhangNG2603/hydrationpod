@@ -969,7 +969,20 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     sendAck("ADD_DRINK", "SUCCESS", lastEventLog.c_str());
   }
-  // 5. Reset Daily Stats
+  // 5. Refill Bottle Command
+  else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("refill")) {
+    float amt = doc["amount"].as<float>();
+    if (amt <= 0) amt = 350.0;
+    current_bottle_ml = min(1000.0f, current_bottle_ml + amt);
+    lastEventLog = "Remote Refill +" + String((int)amt) + "ml";
+    setPixelColorAll(pixels.Color(0, 150, 255));
+    pixels.show();
+    tone(BUZZER_PIN, 800, 150);
+    setVibrationPattern(VIBE_REFILL_CONFIRM);
+    sendAck("REFILL", "SUCCESS", lastEventLog.c_str());
+    sendTelemetryJSON();
+  }
+  // 6. Reset Daily Stats
   else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("reset")) {
     total_drank_today_ml = 0;
     current_bottle_ml = 500;

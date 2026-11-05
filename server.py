@@ -452,7 +452,16 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                 "current_telemetry": latest_telemetry
             }
 
-        # 6. POST /api/reset
+        # 6. POST /api/refill
+        elif self.path.startswith('/api/refill'):
+            amount = float(body_json.get('amount_ml', body_json.get('amount', 350)))
+            latest_telemetry['bottle_ml'] = min(1000, latest_telemetry['bottle_ml'] + amount)
+            latest_telemetry['last_event'] = f"Refilled +{int(amount)}ml"
+            publish_to_mqtt({"target": "refill", "amount": amount})
+            broadcast_sse(latest_telemetry)
+            response_data = {"status": "success", "message": f"Refilled +{int(amount)}ml", "bottle_ml": latest_telemetry['bottle_ml']}
+
+        # 7. POST /api/reset
         elif self.path.startswith('/api/reset'):
             latest_telemetry['drank_today_ml'] = 0
             latest_telemetry['bottle_ml'] = 500
