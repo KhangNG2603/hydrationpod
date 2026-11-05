@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Hydration Pod - Web Postman & Interactive API Tester</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #06b6d4;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-icon {
+      font-size: 32px;
+      background: rgba(2, 132, 199, 0.15);
+      border: 1px solid rgba(2, 132, 199, 0.4);
+      border-radius: 12px;
+      width: 52px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 { font-size: 22px; font-weight: 700; color: #fff; }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .links-nav {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-nav {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-nav:hover {
+      border-color: var(--primary);
+      color: #38bdf8;
+    }
+    
+    .alert-box {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 13.5px;
+      color: #fde68a;
+    }
+    .alert-box strong { color: #fff; }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+    }
+
+    .sidebar {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      height: fit-content;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin: 16px 0 8px 4px;
+    }
+    .section-title:first-child { margin-top: 0; }
+    
+    .endpoint-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-bottom: 4px;
+      transition: background 0.15s;
+      border: 1px solid transparent;
+    }
+    .endpoint-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+    .endpoint-item.active {
+      background: rgba(2, 132, 199, 0.15);
+      border-color: var(--primary);
+    }
+    .method-tag {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .method-get { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .method-post { background: rgba(2, 132, 199, 0.2); color: #38bdf8; }
+
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .request-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .req-method {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .req-url {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: #fff;
+      font-family: var(--font-mono);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+    .req-url:focus { border-color: var(--primary); }
+    .btn-send {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-send:hover { background: var(--primary-hover); }
+
+    .body-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .lbl {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .btn-action-small {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .btn-action-small:hover {
+      color: #fff;
+      border-color: #64748b;
+    }
+
+    textarea.code-box {
+      width: 100%;
+      height: 120px;
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 12px;
+      resize: vertical;
+      outline: none;
+      line-height: 1.4;
+    }
+    textarea.code-box:focus { border-color: var(--primary); }
+
+    .response-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .res-status {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--text-muted);
+    }
+    .status-200 { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-err { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    pre.res-body {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      color: #e2e8f0;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .curl-snippet {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #a5f3fc;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <h1>Smart Hydration Pod - Interactive Web Postman & Tester</h1>
+          <div class="subtitle">Kiểm thử API trực tiếp trên trình duyệt hoặc lấy mã gọi text/cURL cho Postman</div>
+        </div>
+      </div>
+
+      <div class="links-nav">
+        <a href="/" class="btn-nav">📊 Web Dashboard</a>
+        <a href="/postman_collection.json" download class="btn-nav">📥 Tải Collection JSON</a>
+        <a href="/openapi.json" class="btn-nav">📄 OpenAPI Spec</a>
+      </div>
+    </header>
+
+    <!-- Postman Web Note Box -->
+    <div class="alert-box">
+      <strong>💡 Tại sao Import trên Web Postman (go.postman.co) báo lỗi?</strong><br>
+      Trang web Postman chạy trên máy chủ đám mây của Postman ở Mỹ, nên <em>không thể truy cập vào máy tính cục bộ của bạn qua đường link <code>http://localhost:8000</code></em>.<br>
+      👉 <strong>Cách 1 (Nhanh nhất & Trực tiếp nhất):</strong> Sử dụng ngay bảng điều khiển tương tác bên dưới (bấm <strong>Gửi Request (Send)</strong> để test trực tiếp trên Web).<br>
+      👉 <strong>Cách 2 (Trên Postman Web):</strong> Vào Postman ➜ Bấm <strong>Import</strong> ➜ Chọn tab <strong>Raw text</strong> ➜ Dán mã cURL bên dưới vào là xong!
+    </div>
+
+    <div class="main-layout">
+      <!-- Sidebar Endpoints -->
+      <div class="sidebar">
+        <div class="section-title">1. Giám Sát (Telemetry)</div>
+        <div class="endpoint-item active" onclick="loadEndpoint(0)">
+          <span class="method-tag method-get">GET</span>
+          <span>Lấy thông số ESP32</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(1)">
+          <span class="method-tag method-get">GET</span>
+          <span>Danh sách API Routes</span>
+        </div>
+
+        <div class="section-title">2. Điều Khiển & Rung Nhắc Nhở</div>
+        <div class="endpoint-item" onclick="loadEndpoint(2)">
+          <span class="method-tag method-post">POST</span>
+          <span>Test Bộ Rung (300ms)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(3)">
+          <span class="method-tag method-post">POST</span>
+          <span>Nạp nước (+150ml)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(4)">
+          <span class="method-tag method-post">POST</span>
+          <span>Suy Tim (Trần 1000ml)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(5)">
+          <span class="method-tag method-post">POST</span>
+          <span>Chuẩn (Mục tiêu 2000ml)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(6)">
+          <span class="method-tag method-post">POST</span>
+          <span>Tắt chuông (MUTE)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(7)">
+          <span class="method-tag method-post">POST</span>
+          <span>Reset nạp dịch ngày</span>
+        </div>
+
+        <div class="section-title">3. Kịch Bản Demo Nhanh</div>
+        <div class="endpoint-item" onclick="loadEndpoint(8)">
+          <span class="method-tag method-post">POST</span>
+          <span>Demo 1 (Uống 150ml)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(9)">
+          <span class="method-tag method-post">POST</span>
+          <span>Demo 2 (Nhắc nhở 35s)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(10)">
+          <span class="method-tag method-post">POST</span>
+          <span>Demo 3 (Tràn dịch 1050ml)</span>
+        </div>
+      </div>
+
+      <!-- Main Request / Response Workspace -->
+      <div class="workspace">
+        <div class="panel-card">
+          <div class="request-bar">
+            <select id="req-method" class="req-method" onchange="updateCurlSnippet()">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+            <input type="text" id="req-url" class="req-url" value="http://localhost:8000/api/telemetry" oninput="updateCurlSnippet()">
+            <button class="btn-send" onclick="sendRequest()">
+              <span>🚀 Gửi Request (Send)</span>
+            </button>
+          </div>
+
+          <div id="body-section">
+            <div class="body-header">
+              <span class="lbl">REQUEST BODY (JSON)</span>
+              <button class="btn-action-small" onclick="formatJson()">Format JSON</button>
+            </div>
+            <textarea id="req-body" class="code-box" oninput="updateCurlSnippet()"></textarea>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <div class="body-header">
+              <span class="lbl">📋 MÃ GỌI TEXT / CURL ĐỂ IMPORT VÀO POSTMAN</span>
+              <button class="btn-action-small" onclick="copyCurl()">Sao Chép cURL</button>
+            </div>
+            <div id="curl-preview" class="curl-snippet">curl -X GET http://localhost:8000/api/telemetry</div>
+          </div>
+        </div>
+
+        <!-- Response Card -->
+        <div class="panel-card">
+          <div class="response-header">
+            <span class="lbl">KẾT QUẢ PHẢN HỒI (RESPONSE)</span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <span id="res-time" style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">0 ms</span>
+              <span id="res-status" class="res-status">Chưa gửi request</span>
+            </div>
+          </div>
+          <pre id="res-body" class="res-body">// Bấm "Gửi Request (Send)" để xem phản hồi thời gian thực từ ESP32 & MQTT Bridge...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const endpoints = [
+      { method: 'GET', url: 'http://localhost:8000/api/telemetry', body: '' },
+      { method: 'GET', url: 'http://localhost:8000/api/help', body: '' },
+      { method: 'POST', url: 'http://localhost:8000/api/vibrate', body: JSON.stringify({ duration_ms: 300 }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/drink', body: JSON.stringify({ amount_ml: 150 }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'HEART_FAILURE', hard_cap: 1000 }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'STANDARD', goal: 2000 }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/alarm', body: JSON.stringify({ action: 'MUTE' }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/reset', body: '{}' },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_1' }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_2' }, null, 2) },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_3' }, null, 2) }
+    ];
+
+    function loadEndpoint(idx) {
+      document.querySelectorAll('.endpoint-item').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+      });
+      const ep = endpoints[idx];
+      document.getElementById('req-method').value = ep.method;
+      document.getElementById('req-url').value = ep.url;
+      document.getElementById('req-body').value = ep.body;
+      
+      const bodySec = document.getElementById('body-section');
+      bodySec.style.display = ep.method === 'GET' ? 'none' : 'block';
+
+      updateCurlSnippet();
+    }
+
+    function updateCurlSnippet() {
+      const method = document.getElementById('req-method').value;
+      const url = document.getElementById('req-url').value;
+      const body = document.getElementById('req-body').value.trim();
+
+      let curl = `curl -X ${method} "${url}"`;
+      if (method === 'POST') {
+        curl += ` -H "Content-Type: application/json"`;
+        if (body) {
+          const compact = body.replace(/\n\s*/g, ' ');
+          curl += ` -d '${compact}'`;
+        }
+      }
+      document.getElementById('curl-preview').textContent = curl;
+    }
+
+    function copyCurl() {
+      const curl = document.getElementById('curl-preview').textContent;
+      navigator.clipboard.writeText(curl).then(() => {
+        alert("Đã sao chép mã cURL! Bạn có thể dán trực tiếp vào Postman (mục Import -> Raw text) hoặc chạy trên Terminal.");
+      });
+    }
+
+    function formatJson() {
+      try {
+        const val = document.getElementById('req-body').value;
+        if (!val.trim()) return;
+        const parsed = JSON.parse(val);
+        document.getElementById('req-body').value = JSON.stringify(parsed, null, 2);
+        updateCurlSnippet();
+      } catch (e) {
+        alert("JSON không hợp lệ: " + e.message);
+      }
+    }
+
+    async function sendRequest() {
+      const method = document.getElementById('req-method').value;
+      const url = document.getElementById('req-url').value;
+      const bodyText = document.getElementById('req-body').value.trim();
+
+      const statusEl = document.getElementById('res-status');
+      const timeEl = document.getElementById('res-time');
+      const bodyEl = document.getElementById('res-body');
+
+      statusEl.className = 'res-status';
+      statusEl.textContent = 'Đang gửi...';
+      bodyEl.textContent = 'Chờ phản hồi...';
+
+      const t0 = performance.now();
+
+      try {
+        const opts = {
+          method: method,
+          headers: {}
+        };
+        if (method === 'POST') {
+          opts.headers['Content-Type'] = 'application/json';
+          opts.body = bodyText || '{}';
+        }
+
+        const res = await fetch(url, opts);
+        const duration = Math.round(performance.now() - t0);
+        timeEl.textContent = duration + ' ms';
+
+        statusEl.textContent = `${res.status} ${res.statusText || 'OK'}`;
+        if (res.ok) {
+          statusEl.className = 'res-status status-200';
+        } else {
+          statusEl.className = 'res-status status-err';
+        }
+
+        const data = await res.json();
+        bodyEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        const duration = Math.round(performance.now() - t0);
+        timeEl.textContent = duration + ' ms';
+        statusEl.className = 'res-status status-err';
+        statusEl.textContent = 'LỖI KẾT NỐI';
+        bodyEl.textContent = 'Lỗi kết nối tới Server: ' + err.message + '\n\nHãy đảm bảo server.py đang chạy trên máy (http://localhost:8000).';
+      }
+    }
+
+    // Init first endpoint
+    loadEndpoint(0);
+  </script>
+</body>
+</html>

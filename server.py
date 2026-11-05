@@ -165,6 +165,11 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
         self._send_cors_headers()
         self.end_headers()
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
+
     def do_GET(self):
         # 1. SSE Stream endpoint for Web
         if self.path == '/events':
@@ -247,6 +252,18 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_cors_headers()
                 self.end_headers()
                 with open(oa_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+
+        # 6. Serve Interactive Web Postman / API Docs Tester
+        elif self.path in ['/docs', '/docs/', '/tester', '/postman']:
+            doc_file = os.path.join(DIRECTORY, 'docs.html')
+            if os.path.exists(doc_file):
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self._send_cors_headers()
+                self.end_headers()
+                with open(doc_file, 'rb') as f:
                     self.wfile.write(f.read())
                 return
 

@@ -17,9 +17,14 @@
             "url": {
               "raw": "http://localhost:8000/api/telemetry",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "telemetry"]
+              "path": [
+                "api",
+                "telemetry"
+              ]
             },
             "description": "Lấy toàn bộ thông số thời gian thực: lượng nước đã uống (V0), dung tích còn lại (V1), % hoàn thành (V4), pin (V5), trạng thái bộ rung, an toàn."
           },
@@ -33,9 +38,14 @@
             "url": {
               "raw": "http://localhost:8000/api/help",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "help"]
+              "path": [
+                "api",
+                "help"
+              ]
             },
             "description": "Xem danh sách các endpoint hỗ trợ kiểm thử."
           },
@@ -68,9 +78,14 @@
             "url": {
               "raw": "http://localhost:8000/api/vibrate",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "vibrate"]
+              "path": [
+                "api",
+                "vibrate"
+              ]
             },
             "description": "Kích hoạt kiểm thử bộ rung xúc giác trên Smart Bottle qua Cloud MQTT."
           },
@@ -98,9 +113,14 @@
             "url": {
               "raw": "http://localhost:8000/api/drink",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "drink"]
+              "path": [
+                "api",
+                "drink"
+              ]
             },
             "description": "Mô phỏng thao tác uống 150ml nước. Hệ thống sẽ publish MQTT điều khiển xuống Wokwi ESP32 và cập nhật Web Dashboard."
           },
@@ -128,9 +148,14 @@
             "url": {
               "raw": "http://localhost:8000/api/profile",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "profile"]
+              "path": [
+                "api",
+                "profile"
+              ]
             },
             "description": "Chỉ định y tế: Chuyển sang chế độ hạn chế dịch cho bệnh nhân suy tim/suy thận với trần kiểm soát 1000ml."
           },
@@ -158,9 +183,14 @@
             "url": {
               "raw": "http://localhost:8000/api/profile",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "profile"]
+              "path": [
+                "api",
+                "profile"
+              ]
             },
             "description": "Chuyển về chế độ người bình thường (mục tiêu 2000ml/ngày, không áp trần nghiêm ngặt)."
           },
@@ -188,9 +218,14 @@
             "url": {
               "raw": "http://localhost:8000/api/alarm",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "alarm"]
+              "path": [
+                "api",
+                "alarm"
+              ]
             },
             "description": "Tạm thời tắt chuông còi báo động trên phần cứng ESP32."
           },
@@ -218,9 +253,14 @@
             "url": {
               "raw": "http://localhost:8000/api/reset",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "reset"]
+              "path": [
+                "api",
+                "reset"
+              ]
             },
             "description": "Reset toàn bộ chỉ số về 0 đầu ngày mới."
           },
@@ -253,9 +293,14 @@
             "url": {
               "raw": "http://localhost:8000/api/command",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "command"]
+              "path": [
+                "api",
+                "command"
+              ]
             },
             "description": "Kích hoạt Demo 1: Nạp 150ml, LED xanh, chuông xác nhận, rung haptic."
           },
@@ -283,9 +328,14 @@
             "url": {
               "raw": "http://localhost:8000/api/command",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "command"]
+              "path": [
+                "api",
+                "command"
+              ]
             },
             "description": "Kích hoạt Demo 2: Cảnh báo quên uống nước sau 35s không vận động (Rung đôi + chuông)."
           },
@@ -313,9 +363,14 @@
             "url": {
               "raw": "http://localhost:8000/api/command",
               "protocol": "http",
-              "host": ["localhost"],
+              "host": [
+                "localhost"
+              ],
               "port": "8000",
-              "path": ["api", "command"]
+              "path": [
+                "api",
+                "command"
+              ]
             },
             "description": "Kích hoạt Demo 3: Báo động nguy hiểm màu đỏ cấp cứu khi bệnh nhân uống vượt 1000ml chỉ định."
           },
