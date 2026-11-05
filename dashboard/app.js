@@ -14,7 +14,8 @@ let state = {
   is_alarm_muted: false,
   user_role: 'caregiver', // 'caregiver' or 'patient'
   is_mqtt_connected: false,
-  is_emergency_acked: false
+  is_emergency_acked: false,
+  has_alerted_empty: false
 };
 
 // Audio Synthesizer
@@ -222,6 +223,25 @@ function updateUI() {
   const pct = Math.min(100, Math.round((state.drank / state.goal) * 1000) / 10);
   document.getElementById('val-pct').innerText = pct.toFixed(1) + '%';
   document.getElementById('val-bottle').innerHTML = `${Math.round(state.bottle)} <small>ml</small>`;
+  
+  // Empty Bottle / Refill Notification
+  const bBadge = document.getElementById('bottle-refill-badge');
+  const bCard = document.getElementById('card-bottle');
+  if (state.bottle <= 40) {
+    if (bBadge) bBadge.style.display = 'block';
+    if (bCard) bCard.style.borderColor = 'rgba(245, 158, 11, 0.7)';
+    if (!state.has_alerted_empty) {
+      state.has_alerted_empty = true;
+      log('⚠️ [BÌNH CẠN NƯỚC]: Lượng nước trong bình chỉ còn ' + Math.round(state.bottle) + 'ml! Vui lòng châm thêm nước (Refill).', 'warn');
+      playTone(700, 'triangle', 0.15);
+      setTimeout(() => playTone(900, 'sine', 0.2), 180);
+    }
+  } else {
+    if (bBadge) bBadge.style.display = 'none';
+    if (bCard) bCard.style.borderColor = '';
+    state.has_alerted_empty = false;
+  }
+
   document.getElementById('val-idle').innerHTML = `${state.idle_sec} <small>giây</small>`;
   document.getElementById('val-bat').innerHTML = `${state.battery_soc} <small>%</small>`;
 

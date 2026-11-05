@@ -544,6 +544,23 @@ void updateSafetyStatus() {
   } else {
     currentAlertLevel = 0; // Normal
   }
+
+  // Empty Bottle Detection (Nhắc châm thêm nước khi bình cạn)
+  static bool empty_alert_triggered = false;
+  if (current_bottle_ml <= 40.0) {
+    if (!empty_alert_triggered) {
+      empty_alert_triggered = true;
+      lastEventLog = "Bottle Empty: Please Refill";
+      if (!is_alarm_muted) {
+        tone(BUZZER_PIN, 880, 250);
+      }
+      setVibrationPattern(VIBE_REFILL_CONFIRM);
+      Serial.println(F("⚠️ [EMPTY BOTTLE] Water depleted <= 40ml! Please refill water."));
+      sendAck("BOTTLE_EMPTY", "WARN", "Water depleted <= 40ml. Refill needed.");
+    }
+  } else if (current_bottle_ml > 80.0) {
+    empty_alert_triggered = false;
+  }
 }
 
 // --- VIBRATION MOTOR CONTROLLER (HAPTIC ENGINE) ---
@@ -814,10 +831,14 @@ void updateOLEDDisplay() {
 
   if (currentSafety == SAFETY_EMERGENCY_OVERCAP) {
     display.print(is_alarm_muted ? F("OVERCAP (CAN THIEP OK)") : F("!! EMERGENCY OVERCAP !!"));
+  } else if (current_bottle_ml <= 40.0) {
+    display.print(F("!! CAN NUOC - REFILL !!"));
   } else if (currentSafety == SAFETY_DANGER_RED) {
     display.print(F("DANGER: 90% Hard Cap"));
   } else if (currentSafety == SAFETY_APPROACH_YELLOW) {
     display.print(F("WARN: 80% Hard Cap"));
+  } else if (goal_ml > 0 && total_drank_today_ml >= goal_ml) {
+    display.print(F("🎉 DAT 100% MUC TIEU!"));
   } else if (currentAlertLevel >= 2) {
     display.print(F("REMINDER: Uong nuoc!"));
   } else {
@@ -855,6 +876,8 @@ void sendTelemetryJSON() {
 
   // Real-time vibration motor state and cloud telemetry
   doc["vibration_motor"] = is_vibrating ? 1 : 0;
+  doc["is_empty"] = (current_bottle_ml <= 40.0f);
+  doc["goal_reached"] = (goal_ml > 0 && total_drank_today_ml >= goal_ml);
   doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
   doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
   doc["is_muted"] = is_alarm_muted;
