@@ -78,6 +78,8 @@ def broadcast_sse(data):
 def evaluate_safety():
     cap = latest_telemetry.get("hard_cap_ml", 0)
     drank = latest_telemetry.get("drank_today_ml", 0)
+    bottle = latest_telemetry.get("bottle_ml", 500)
+    latest_telemetry["is_empty"] = (bottle <= 40)
     if cap > 0:
         ratio = drank / cap
         if ratio >= 1.0:
@@ -473,6 +475,7 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             amount = float(body_json.get('amount_ml', body_json.get('amount', 350)))
             latest_telemetry['bottle_ml'] = min(1000, latest_telemetry['bottle_ml'] + amount)
             latest_telemetry['last_event'] = f"Refilled +{int(amount)}ml"
+            evaluate_safety()
             publish_to_mqtt({"target": "refill", "amount": amount})
             broadcast_sse(latest_telemetry)
             response_data = {"status": "success", "message": f"Refilled +{int(amount)}ml", "bottle_ml": latest_telemetry['bottle_ml']}

@@ -287,3 +287,4 @@ class _FluidWavePainter extends CustomPainter {
         oldDelegate.isLow != isLow;
   }
 }
+

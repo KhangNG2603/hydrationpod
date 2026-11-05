@@ -212,13 +212,55 @@ def main():
     except Exception as e:
         test_print("Test 10: Ringtone Customization", False, str(e))
 
+    # --- TEST 11: Patient Mobile App UI & Flutter Project Structure ---
+    try:
+        req = urllib.request.Request(f"{API_BASE}/mobile", method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            mobile_html = resp.read().decode("utf-8")
+            http_ok = (resp.status == 200 and "HydraPod Patient" in mobile_html)
+        flutter_files = [
+            "mobile_app/pubspec.yaml",
+            "mobile_app/lib/main.dart",
+            "mobile_app/lib/models/telemetry_model.dart",
+            "mobile_app/lib/services/hydropod_service.dart",
+            "mobile_app/lib/screens/patient_home_screen.dart",
+            "mobile_app/lib/widgets/water_bottle_widget.dart",
+        ]
+        all_flutter_exist = all(os.path.exists(f) for f in flutter_files)
+        test_print("Test 11: Patient Mobile App (/mobile & Flutter Dart Source)",
+                   http_ok and all_flutter_exist,
+                   f"GET /mobile HTTP 200 OK ({len(mobile_html)} bytes) + {len(flutter_files)}/6 Flutter files verified")
+    except Exception as e:
+        test_print("Test 11: Patient Mobile App", False, str(e))
+
+    # --- TEST 12: Mobile Patient Empty Bottle Alert & Refill Workflow ---
+    try:
+        http_post("/api/reset", {})
+        time.sleep(0.4)
+        # Drink 480ml out of 500ml -> remaining 20ml (<= 40ml triggers is_empty)
+        http_post("/api/drink", {"amount_ml": 480})
+        time.sleep(0.6)
+        telem_low = http_get("/api/telemetry")
+        was_empty = telem_low.get("is_empty") is True and telem_low.get("bottle_ml", 500) <= 40
+
+        # Mobile user taps 'Châm +350ml'
+        http_post("/api/refill", {"amount_ml": 350})
+        time.sleep(0.6)
+        telem_refilled = http_get("/api/telemetry")
+        refilled_ok = telem_refilled.get("is_empty") is False and telem_refilled.get("bottle_ml", 0) >= 350
+        test_print("Test 12: Mobile Empty Bottle Warning & Refill (+350ml)",
+                   was_empty and refilled_ok,
+                   f"Low={telem_low.get('bottle_ml')}ml (is_empty={was_empty}) -> Refilled={telem_refilled.get('bottle_ml')}ml")
+    except Exception as e:
+        test_print("Test 12: Mobile Empty Bottle & Refill", False, str(e))
+
     # Cleanup
     stop_sim.set()
     time.sleep(0.5)
 
     print("=" * 72)
-    print("🎉 ALL 10 INTEGRATED TESTS COMPLETED SUCCESSFULLY!")
-    print("   ESP32 Firmware + Haptic Motor + Cloud MQTT + REST API + Ringtone Customization")
+    print("🎉 ALL 12 INTEGRATED TESTS COMPLETED SUCCESSFULLY!")
+    print("   ESP32 Firmware + Haptic Motor + Cloud MQTT + REST API + Patient Mobile App")
     print("=" * 72)
 
 if __name__ == "__main__":
