@@ -462,26 +462,6 @@ function updateUI() {
     if (mp3Lbl) mp3Lbl.innerText = state.custom_mp3_name;
     if (mp3Disp) mp3Disp.innerText = '🎵 ' + state.custom_mp3_name;
   }
-
-  updateLEDs();
-}
-
-// LED Ring simulation visualizer
-function updateLEDs() {
-  const dots = document.querySelectorAll('.dot');
-  let color = '#334155';
-
-  if (state.safety === 'EMERGENCY_OVERCAP' || (state.cap > 0 && state.drank >= state.cap)) {
-    color = (Math.floor(Date.now() / 200) % 2 === 0) ? '#ef4444' : '#000000';
-  } else if (state.alert_level >= 2) {
-    color = (Math.floor(Date.now() / 300) % 2 === 0) ? '#f59e0b' : '#000000';
-  } else if (state.alert_level === 1) {
-    color = '#f59e0b';
-  } else {
-    color = '#22c55e';
-  }
-
-  dots.forEach(d => d.style.background = color);
 }
 
 // --- USER ROLE SWITCHER (BTVN 3: Phân Quyền Đa Người Dùng) ---

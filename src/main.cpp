@@ -31,7 +31,6 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_NeoPixel.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <HX711.h>
@@ -41,8 +40,6 @@
 // --- PIN DEFINITIONS ---
 #define HX711_DOUT_PIN   16
 #define HX711_CLK_PIN    17
-#define NEOPIXEL_PIN     15
-#define NUMPIXELS        8
 #define BUZZER_PIN       4
 #define MOTOR_PIN        5      // Bộ rung nhắc nhở (Haptic Vibration Motor)
 #define BAT_ADC_PIN      34
@@ -67,7 +64,6 @@ const char* TOPIC_STATUS    = "smartbottle/HYDROPOD_01/status";
 // --- HARDWARE & NETWORK OBJECTS ---
 HX711 scale;
 Adafruit_MPU6050 mpu;
-Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 WiFiClient espClient;
@@ -171,7 +167,6 @@ void updateVibration();
 void updateOLEDDisplay();
 void sendTelemetryJSON();
 void processSerialInput();
-void setPixelColorAll(uint32_t color);
 
 void setup() {
   Serial.begin(115200);
@@ -181,12 +176,6 @@ void setup() {
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   digitalWrite(MOTOR_PIN, LOW);
-
-  // Initialize NeoPixel
-  pixels.begin();
-  pixels.setBrightness(120);
-  setPixelColorAll(pixels.Color(0, 150, 255)); // Startup Cyan
-  pixels.show();
 
   // Test vibration motor briefly on boot
   digitalWrite(MOTOR_PIN, HIGH);
@@ -251,9 +240,6 @@ void setup() {
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(512); // Buffer size 512B for full telemetry JSON
 
-  delay(400);
-  setPixelColorAll(pixels.Color(0, 0, 0));
-  pixels.show();
   Serial.println(F("System Ready. All events triggered 100% by HX711 & MPU6050 sensors."));
 }
 
@@ -486,9 +472,7 @@ void processFSM() {
           Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml, Bottle Remaining: %d ml)\n", 
                         (int)drank, (int)total_drank_today_ml, (int)current_bottle_ml);
 
-          // Visual & Audio Confirmation + Haptic Click Confirmation
-          setPixelColorAll(pixels.Color(0, 255, 0)); // Green ring
-          pixels.show();
+          // Audio Confirmation + Haptic Click Confirmation
           tone(BUZZER_PIN, 1046, 250);
           triggerSingleVibe(90); // 90ms gentle tactile vibration feedback
 
@@ -503,8 +487,6 @@ void processFSM() {
           Serial.printf("🔵 [SENSOR REFILL DETECTED] Refilled: +%d ml (New Bottle: %d ml)\n",
                         (int)refilled, (int)current_bottle_ml);
 
-          setPixelColorAll(pixels.Color(0, 150, 255)); // Cyan ring
-          pixels.show();
           tone(BUZZER_PIN, 800, 150);
           setVibrationPattern(VIBE_REFILL_CONFIRM); // 2 quick tactile pulses
 
@@ -742,7 +724,7 @@ void playBuzzerTone(const char* event_type) {
   }
 }
 
-// --- ALERT OUTPUTS (LEDS & AUDIO BUZZER) ---
+// --- ALERT OUTPUTS (MOTOR VIBRATION & AUDIO BUZZER) ---
 void handleAlertOutputs() {
   // Emergency Overcap (Vượt trần y tế)
   if (currentSafety == SAFETY_EMERGENCY_OVERCAP) {
@@ -751,25 +733,15 @@ void handleAlertOutputs() {
       digitalWrite(MOTOR_PIN, LOW);
       noTone(BUZZER_PIN);
       digitalWrite(BUZZER_PIN, LOW);
-      setPixelColorAll(pixels.Color(180, 0, 0)); // Steady red when muted/acknowledged
-      pixels.show();
       return;
     }
 
     setVibrationPattern(VIBE_EMERGENCY_ALARM);
 
     static unsigned long lastFlash = 0;
-    static bool flashOn = false;
     if (millis() - lastFlash >= 200) {
       lastFlash = millis();
-      flashOn = !flashOn;
-      if (flashOn) {
-        setPixelColorAll(pixels.Color(255, 0, 0));
-        playBuzzerTone("EMERGENCY");
-      } else {
-        setPixelColorAll(pixels.Color(0, 0, 0));
-      }
-      pixels.show();
+      playBuzzerTone("EMERGENCY");
     }
     return;
   }
@@ -779,8 +751,6 @@ void handleAlertOutputs() {
     if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
       setVibrationPattern(VIBE_NONE);
     }
-    setPixelColorAll(pixels.Color(255, 30, 0));
-    pixels.show();
     return;
   } 
   // 80% Hard Cap (Yellow Warning)
@@ -788,64 +758,33 @@ void handleAlertOutputs() {
     if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
       setVibrationPattern(VIBE_NONE);
     }
-    setPixelColorAll(pixels.Color(255, 180, 0));
-    pixels.show();
     return;
   }
 
   // Idle Alert Levels (Quên uống nước)
   if (currentAlertLevel == 1) {
-    // Breathing amber LED, motor remains quiet
+    // Level 1: Gentle OLED notification, motor & buzzer quiet
     if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
       setVibrationPattern(VIBE_NONE);
     }
-    static int breath = 0;
-    static int dir = 4;
-    static unsigned long lastBreath = 0;
-    if (millis() - lastBreath >= 25) {
-      lastBreath = millis();
-      breath += dir;
-      if (breath >= 180 || breath <= 10) dir = -dir;
-      setPixelColorAll(pixels.Color(breath, breath / 2, 0));
-      pixels.show();
-    }
-
   } else if (currentAlertLevel == 2) {
-    // Level 2: Double Pulse Vibration + Periodic Chime + Orange Blink
+    // Level 2: Double Pulse Vibration + Periodic Chime
     setVibrationPattern(VIBE_DOUBLE_PULSE);
 
     static unsigned long lastBlink = 0;
-    static bool blinkState = false;
-    if (millis() - lastBlink >= 500) {
+    if (millis() - lastBlink >= 1000) {
       lastBlink = millis();
-      blinkState = !blinkState;
-      if (blinkState) {
-        setPixelColorAll(pixels.Color(255, 120, 0));
-        playBuzzerTone("REMIND_LVL2");
-      } else {
-        setPixelColorAll(pixels.Color(0, 0, 0));
-      }
-      pixels.show();
+      playBuzzerTone("REMIND_LVL2");
     }
-
   } else if (currentAlertLevel == 3) {
-    // Level 3: Urgent Triple Pulse Vibration + Rapid Chime + Red/Orange Blink
+    // Level 3: Urgent Triple Pulse Vibration + Rapid Chime
     setVibrationPattern(VIBE_TRIPLE_URGENT);
 
     static unsigned long lastRapid = 0;
-    static bool rapidState = false;
-    if (millis() - lastRapid >= 250) {
+    if (millis() - lastRapid >= 500) {
       lastRapid = millis();
-      rapidState = !rapidState;
-      if (rapidState) {
-        setPixelColorAll(pixels.Color(255, 0, 60));
-        playBuzzerTone("REMIND_LVL3");
-      } else {
-        setPixelColorAll(pixels.Color(0, 0, 0));
-      }
-      pixels.show();
+      playBuzzerTone("REMIND_LVL3");
     }
-
   } else {
     // Normal resting state
     if (currentVibePattern != VIBE_CUSTOM_ONCE && 
@@ -853,8 +792,6 @@ void handleAlertOutputs() {
         currentVibePattern != VIBE_REFILL_CONFIRM) {
       setVibrationPattern(VIBE_NONE);
     }
-    setPixelColorAll(pixels.Color(0, 0, 0));
-    pixels.show();
   }
 }
 
@@ -1034,8 +971,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     last_intake_timestamp = millis();
     lastEventLog = "Remote Drink +" + String((int)amt) + "ml";
 
-    setPixelColorAll(pixels.Color(0, 255, 0));
-    pixels.show();
     tone(BUZZER_PIN, 1046, 200);
     triggerSingleVibe(100);
 
@@ -1047,8 +982,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (amt <= 0) amt = 350.0;
     current_bottle_ml = min(1000.0f, current_bottle_ml + amt);
     lastEventLog = "Remote Refill +" + String((int)amt) + "ml";
-    setPixelColorAll(pixels.Color(0, 150, 255));
-    pixels.show();
     tone(BUZZER_PIN, 800, 150);
     setVibrationPattern(VIBE_REFILL_CONFIRM);
     sendAck("REFILL", "SUCCESS", lastEventLog.c_str());
@@ -1212,11 +1145,5 @@ void processSerialInput() {
       sendAck("SERIAL_RESET", "SUCCESS", lastEventLog.c_str());
       sendTelemetryJSON();
     }
-  }
-}
-
-void setPixelColorAll(uint32_t color) {
-  for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, color);
   }
 }

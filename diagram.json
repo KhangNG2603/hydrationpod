@@ -44,13 +44,6 @@
       "top": 110,
       "left": 180,
       "attrs": { "volume": "0.1" }
-    },
-    {
-      "type": "wokwi-neopixel-ring",
-      "id": "ring1",
-      "top": 220,
-      "left": 170,
-      "attrs": { "pixels": "8" }
     }
   ],
   "connections": [
@@ -71,10 +64,7 @@
     [ "esp:5", "motor1:A", "orange", [ "h35" ] ],
     [ "motor1:C", "esp:GND.2", "black", [ "h20", "v-30", "h-130" ] ],
     [ "esp:4", "bz1:1", "red", [ "h35" ] ],
-    [ "bz1:2", "esp:GND.2", "black", [ "h20", "v-120", "h-130" ] ],
-    [ "esp:15", "ring1:DIN", "yellow", [ "h35" ] ],
-    [ "ring1:GND", "esp:GND.2", "black", [ "h20", "v-230", "h-130" ] ],
-    [ "ring1:VCC", "esp:5V", "red", [ "v40", "h-170" ] ]
+    [ "bz1:2", "esp:GND.2", "black", [ "h20", "v-120", "h-130" ] ]
   ],
   "dependencies": {}
 }
