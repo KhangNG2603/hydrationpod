@@ -7,68 +7,68 @@
     {
       "type": "wokwi-ssd1306",
       "id": "oled",
-      "top": -160,
-      "left": -60,
+      "top": -200,
+      "left": -90,
       "attrs": { "i2cAddress": "0x3c" }
     },
     {
       "type": "wokwi-mpu6050",
       "id": "mpu",
-      "top": -160,
+      "top": -200,
       "left": 150,
       "attrs": {}
     },
     {
       "type": "wokwi-hx711",
       "id": "hx711",
-      "top": 150,
-      "left": -180,
+      "top": 70,
+      "left": -270,
       "attrs": { "type": "5kg" }
-    },
-    {
-      "type": "wokwi-neopixel-ring",
-      "id": "ring1",
-      "top": 160,
-      "left": 180,
-      "attrs": { "pixels": "8" }
-    },
-    {
-      "type": "wokwi-buzzer",
-      "id": "bz1",
-      "top": 180,
-      "left": 30,
-      "attrs": { "volume": "0.1" }
     },
     {
       "type": "wokwi-led",
       "id": "motor1",
-      "top": 180,
-      "left": -60,
+      "top": 20,
+      "left": 160,
       "attrs": { "color": "orange", "label": "VIBRATION MOTOR" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": 110,
+      "left": 160,
+      "attrs": { "volume": "0.1" }
+    },
+    {
+      "type": "wokwi-neopixel-ring",
+      "id": "ring1",
+      "top": 220,
+      "left": 150,
+      "attrs": { "pixels": "8" }
     }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
     [ "esp:RX", "$serialMonitor:TX", "", [] ],
-    [ "esp:21", "oled:SDA", "green", [ "v-20", "h-50" ] ],
-    [ "esp:22", "oled:SCL", "blue", [ "v-30", "h-40" ] ],
-    [ "oled:GND", "esp:GND.1", "black", [] ],
-    [ "oled:VCC", "esp:3V3", "red", [] ],
-    [ "esp:21", "mpu:SDA", "green", [ "v-20", "h100" ] ],
-    [ "esp:22", "mpu:SCL", "blue", [ "v-30", "h110" ] ],
-    [ "mpu:GND", "esp:GND.1", "black", [] ],
-    [ "mpu:VCC", "esp:3V3", "red", [] ],
-    [ "esp:16", "hx711:DT", "purple", [] ],
-    [ "esp:17", "hx711:SCK", "orange", [] ],
-    [ "hx711:GND", "esp:GND.1", "black", [] ],
-    [ "hx711:VCC", "esp:3V3", "red", [] ],
-    [ "esp:15", "ring1:DIN", "yellow", [] ],
-    [ "ring1:GND", "esp:GND.2", "black", [] ],
-    [ "ring1:VCC", "esp:5V", "red", [] ],
-    [ "esp:4", "bz1:1", "red", [] ],
-    [ "bz1:2", "esp:GND.2", "black", [] ],
-    [ "esp:5", "motor1:A", "orange", [] ],
-    [ "motor1:C", "esp:GND.2", "black", [] ]
+    [ "esp:21", "oled:SDA", "green", [ "v-30", "h-70" ] ],
+    [ "esp:22", "oled:SCL", "blue", [ "v-40", "h-60" ] ],
+    [ "oled:GND", "esp:GND.1", "black", [ "v30", "h-30" ] ],
+    [ "oled:VCC", "esp:3V3", "red", [ "v40", "h-40" ] ],
+    [ "esp:21", "mpu:SDA", "green", [ "v-20", "h90" ] ],
+    [ "esp:22", "mpu:SCL", "blue", [ "v-30", "h100" ] ],
+    [ "mpu:GND", "esp:GND.2", "black", [ "v30", "h-90" ] ],
+    [ "mpu:VCC", "esp:3V3", "red", [ "v20", "h-150" ] ],
+    [ "esp:16", "hx711:DT", "purple", [ "v20", "h-160" ] ],
+    [ "esp:17", "hx711:SCK", "orange", [ "v10", "h-150" ] ],
+    [ "hx711:GND", "esp:GND.1", "black", [ "v-30", "h80" ] ],
+    [ "hx711:VCC", "esp:3V3", "red", [ "v-40", "h70" ] ],
+    [ "esp:5", "motor1:A", "orange", [ "h40" ] ],
+    [ "motor1:C", "esp:GND.2", "black", [ "h20", "v-30", "h-130" ] ],
+    [ "esp:4", "bz1:1", "red", [ "h40" ] ],
+    [ "bz1:2", "esp:GND.2", "black", [ "h20", "v-120", "h-130" ] ],
+    [ "esp:15", "ring1:DIN", "yellow", [ "h40" ] ],
+    [ "ring1:GND", "esp:GND.2", "black", [ "h20", "v-230", "h-130" ] ],
+    [ "ring1:VCC", "esp:5V", "red", [ "v30", "h-150" ] ]
   ],
   "dependencies": {}
 }
