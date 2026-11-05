@@ -13,7 +13,8 @@ let state = {
   vibration_motor: 0,
   is_alarm_muted: false,
   user_role: 'caregiver', // 'caregiver' or 'patient'
-  is_mqtt_connected: false
+  is_mqtt_connected: false,
+  is_emergency_acked: false
 };
 
 // Audio Synthesizer
@@ -251,12 +252,20 @@ function updateUI() {
 
     if (ratio >= 1.0) {
       tag.classList.add('tag-danger');
-      tag.innerText = '🚨 BÁO ĐỘNG VƯỢT TRẦN';
       fill.style.background = 'var(--red)';
-      document.getElementById('modal').classList.add('active');
       document.getElementById('m-drank').innerText = Math.round(state.drank);
       document.getElementById('m-cap').innerText = Math.round(state.cap);
-      playTone(1500, 'sawtooth', 0.3);
+
+      if (!state.is_emergency_acked) {
+        tag.innerText = '🚨 BÁO ĐỘNG VƯỢT TRẦN';
+        document.getElementById('modal').classList.add('active');
+        if (!state.is_alarm_muted) {
+          playTone(1500, 'sawtooth', 0.3);
+        }
+      } else {
+        tag.innerText = '🚨 ĐÃ CAN THIỆP Y TẾ';
+        document.getElementById('modal').classList.remove('active');
+      }
     } else if (ratio >= 0.90) {
       tag.classList.add('tag-danger');
       tag.innerText = '🔴 90% HARD CAP';
@@ -384,6 +393,14 @@ function resetDay() {
   state.drank = 0;
   state.bottle = 500;
   state.idle_sec = 0;
+  state.is_emergency_acked = false;
+  state.is_alarm_muted = false;
+  const btn = document.getElementById('btn-mute');
+  const txt = document.getElementById('txt-mute');
+  if (btn && txt) {
+    btn.classList.remove('active');
+    txt.innerText = 'Tắt Còi Báo Động';
+  }
   sendCommand({ target: 'reset' });
   addChartPoint(0);
   updateUI();
@@ -413,6 +430,14 @@ function runDemo(n) {
   } else if (n === 3) {
     setProfile('HEART_FAILURE');
     state.drank = 1050;
+    state.is_emergency_acked = false;
+    state.is_alarm_muted = false;
+    const btn = document.getElementById('btn-mute');
+    const txt = document.getElementById('txt-mute');
+    if (btn && txt) {
+      btn.classList.remove('active');
+      txt.innerText = 'Tắt Còi Báo Động';
+    }
     sendCommand({ command: 'SIM_DEMO_SCENARIO_3' });
     addChartPoint(state.drank);
   }
@@ -420,8 +445,20 @@ function runDemo(n) {
 }
 
 function ackEmergency() {
+  state.is_emergency_acked = true;
+  state.is_alarm_muted = true;
   document.getElementById('modal').classList.remove('active');
-  log('Bác sĩ/Caregiver đã xác nhận can thiệp báo động vượt trần.', 'info');
+
+  const btn = document.getElementById('btn-mute');
+  const txt = document.getElementById('txt-mute');
+  if (btn && txt) {
+    btn.classList.add('active');
+    txt.innerText = 'Đã Tắt Chuông Báo';
+  }
+
+  log('👨‍⚕️ Bác sĩ / Điều dưỡng đã xác nhận can thiệp báo động! Đã tắt còi báo khẩn cấp trên phần cứng ESP32.', 'info');
+  sendCommand({ target: 'alarm', action: 'MUTE' });
+  updateUI();
 }
 
 // Logger

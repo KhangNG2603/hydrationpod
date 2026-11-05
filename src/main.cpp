@@ -661,6 +661,16 @@ void updateVibration() {
 void handleAlertOutputs() {
   // Emergency Overcap (Vượt trần y tế)
   if (currentSafety == SAFETY_EMERGENCY_OVERCAP) {
+    if (is_alarm_muted) {
+      setVibrationPattern(VIBE_NONE);
+      digitalWrite(MOTOR_PIN, LOW);
+      noTone(BUZZER_PIN);
+      digitalWrite(BUZZER_PIN, LOW);
+      setPixelColorAll(pixels.Color(180, 0, 0)); // Steady red when muted/acknowledged
+      pixels.show();
+      return;
+    }
+
     setVibrationPattern(VIBE_EMERGENCY_ALARM);
 
     static unsigned long lastFlash = 0;
@@ -670,7 +680,7 @@ void handleAlertOutputs() {
       flashOn = !flashOn;
       if (flashOn) {
         setPixelColorAll(pixels.Color(255, 0, 0));
-        if (!is_alarm_muted) tone(BUZZER_PIN, 2500, 150);
+        tone(BUZZER_PIN, 2500, 150);
       } else {
         setPixelColorAll(pixels.Color(0, 0, 0));
       }
@@ -803,7 +813,7 @@ void updateOLEDDisplay() {
   display.setCursor(2, 54);
 
   if (currentSafety == SAFETY_EMERGENCY_OVERCAP) {
-    display.print(F("!! EMERGENCY OVERCAP !!"));
+    display.print(is_alarm_muted ? F("OVERCAP (CAN THIEP OK)") : F("!! EMERGENCY OVERCAP !!"));
   } else if (currentSafety == SAFETY_DANGER_RED) {
     display.print(F("DANGER: 90% Hard Cap"));
   } else if (currentSafety == SAFETY_APPROACH_YELLOW) {
