@@ -1,7 +1,7 @@
 # 💧 Smart Hydration Pod - Sensor-Driven IoT & Medical Hydration Engine
 
 > **Dự án Internet of Things**: Module Thông Minh Gắn Rời Cho Bình Nước Nhắc Nhở Uống Nước Tự Động & Giám Sát Y Tế  
-> **Kiến trúc tích hợp**: ESP32 (Wokwi) + Load Cell HX711 + IMU MPU6050 + Haptic Vibration Motor + NeoPixel WS2812B + OLED SSD1306 + EMQX Cloud MQTT + Python REST API Bridge + Web Dashboard + Node-RED + Postman Suite.
+> **Kiến trúc tích hợp**: ESP32 (Wokwi) + Load Cell HX711 + IMU MPU6050 + Haptic Vibration Motor + Piezo Buzzer + OLED SSD1306 + EMQX Cloud MQTT + Python REST API Bridge + Web Dashboard (Doctor) + Flutter Mobile App (Patient) + Node-RED + Postman Suite.
 
 ---
 
@@ -96,9 +96,7 @@
 | | VCC / GND | **3V3 / GND** | Nguồn cấp cho IMU |
 | **Màn Hình OLED SSD1306** | SDA / SCL | **GPIO 21 / 22** | Bus I2C chung (Địa chỉ 0x3C, 128x64 px) |
 | | VCC / GND | **3V3 / GND** | Hiển thị tiến độ, % pin, trạng thái rung |
-| **Vòng 8 LED WS2812B** | DIN | **GPIO 15** | Đèn viền báo hiệu đổi màu trực quan |
-| | VCC / GND | **5V / GND** | Nguồn công suất LED RGB |
-| **Còi Báo Động (Buzzer)** | Pin (+) | **GPIO 4** | Phát âm báo nhắc nhở & chuông cứu hộ |
+| **Còi Báo Động (Buzzer)** | Pin (+) | **GPIO 4** | Phát âm báo nhắc nhở, chuông đa âm sắc & cứu hộ |
 | **Bộ Rung (Vibration Motor)**| Pin (+) | **GPIO 5** | Bộ rung xúc giác Haptic nhắc nhở & phản hồi |
 | | Pin (-) | **GND** | Nối Mass chung ESP32 |
 
