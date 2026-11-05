@@ -80,6 +80,17 @@ enum ProfileType {
   PROFILE_GOUT             // Sỏi thận / Gout (Mục tiêu 2500ml, nhắc 30 phút)
 };
 
+// --- RINGTONE STYLES (Tùy biến tiếng chuông) ---
+enum RingtoneStyle {
+  RINGTONE_CHIME = 0,    // Chuông đôi nhẹ nhàng (G5 -> C6)
+  RINGTONE_MELODIC,      // Giai điệu du dương (C5 -> E5 -> G5)
+  RINGTONE_DIGITAL,      // Tiếng Beep điện tử đanh thép (2093Hz)
+  RINGTONE_SIREN         // Còi cấp cứu y tế dồn dập (1500Hz - 2500Hz)
+};
+
+RingtoneStyle currentRingtone = RINGTONE_CHIME;
+void playBuzzerTone(const char* event_type);
+
 // --- VIBRATION MOTOR PATTERNS ---
 enum VibrationPattern {
   VIBE_NONE = 0,
@@ -674,6 +685,61 @@ void updateVibration() {
   }
 }
 
+// --- RINGTONE ENGINE (Phát tiếng chuông tùy chỉnh) ---
+void playBuzzerTone(const char* event_type) {
+  if (is_alarm_muted) return;
+
+  if (strcmp(event_type, "DRINK") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 1318, 200); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 1760, 150); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 1500, 200); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 1046, 220); break;
+    }
+  } else if (strcmp(event_type, "REFILL") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 988, 180); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 1568, 120); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 1200, 180); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 800, 160); break;
+    }
+  } else if (strcmp(event_type, "REMIND_LVL2") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 659, 100); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 2093, 70); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 1400, 120); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 1200, 90); break;
+    }
+  } else if (strcmp(event_type, "REMIND_LVL3") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 784, 120); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 2349, 90); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 1800, 140); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 1600, 120); break;
+    }
+  } else if (strcmp(event_type, "EMERGENCY") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 1568, 150); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 2637, 120); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 2800, 180); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 2200, 150); break;
+    }
+  } else if (strcmp(event_type, "PREVIEW") == 0) {
+    switch (currentRingtone) {
+      case RINGTONE_MELODIC: tone(BUZZER_PIN, 659, 150); break;
+      case RINGTONE_DIGITAL: tone(BUZZER_PIN, 2093, 120); break;
+      case RINGTONE_SIREN:   tone(BUZZER_PIN, 1800, 200); break;
+      case RINGTONE_CHIME:
+      default:               tone(BUZZER_PIN, 1046, 200); break;
+    }
+  }
+}
+
 // --- ALERT OUTPUTS (LEDS & AUDIO BUZZER) ---
 void handleAlertOutputs() {
   // Emergency Overcap (Vượt trần y tế)
@@ -697,7 +763,7 @@ void handleAlertOutputs() {
       flashOn = !flashOn;
       if (flashOn) {
         setPixelColorAll(pixels.Color(255, 0, 0));
-        tone(BUZZER_PIN, 2500, 150);
+        playBuzzerTone("EMERGENCY");
       } else {
         setPixelColorAll(pixels.Color(0, 0, 0));
       }
@@ -753,7 +819,7 @@ void handleAlertOutputs() {
       blinkState = !blinkState;
       if (blinkState) {
         setPixelColorAll(pixels.Color(255, 120, 0));
-        if (!is_alarm_muted) tone(BUZZER_PIN, 1200, 80);
+        playBuzzerTone("REMIND_LVL2");
       } else {
         setPixelColorAll(pixels.Color(0, 0, 0));
       }
@@ -771,7 +837,7 @@ void handleAlertOutputs() {
       rapidState = !rapidState;
       if (rapidState) {
         setPixelColorAll(pixels.Color(255, 0, 60));
-        if (!is_alarm_muted) tone(BUZZER_PIN, 1800, 100);
+        playBuzzerTone("REMIND_LVL3");
       } else {
         setPixelColorAll(pixels.Color(0, 0, 0));
       }
@@ -876,6 +942,9 @@ void sendTelemetryJSON() {
 
   // Real-time vibration motor state and cloud telemetry
   doc["vibration_motor"] = is_vibrating ? 1 : 0;
+  doc["ringtone"] = (currentRingtone == RINGTONE_MELODIC ? "MELODIC" :
+                    (currentRingtone == RINGTONE_DIGITAL ? "DIGITAL" :
+                    (currentRingtone == RINGTONE_SIREN ? "SIREN" : "CHIME")));
   doc["is_empty"] = (current_bottle_ml <= 40.0f);
   doc["goal_reached"] = (goal_ml > 0 && total_drank_today_ml >= goal_ml);
   doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
@@ -990,7 +1059,20 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     lastEventLog = "Remote Daily Reset";
     sendAck("RESET_DAY", "SUCCESS", "Daily counters reset to 0");
   }
-  // 6. Device Configuration from Cloud
+  // 7. Change Ringtone Style
+  else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("ringtone")) {
+    String r_tone = doc["tone"].as<String>();
+    if (r_tone.equalsIgnoreCase("MELODIC")) currentRingtone = RINGTONE_MELODIC;
+    else if (r_tone.equalsIgnoreCase("DIGITAL")) currentRingtone = RINGTONE_DIGITAL;
+    else if (r_tone.equalsIgnoreCase("SIREN")) currentRingtone = RINGTONE_SIREN;
+    else currentRingtone = RINGTONE_CHIME;
+
+    lastEventLog = "Ringtone: " + r_tone;
+    playBuzzerTone("PREVIEW");
+    sendAck("SET_RINGTONE", "SUCCESS", lastEventLog.c_str());
+    sendTelemetryJSON();
+  }
+  // 8. Device Configuration from Cloud
   else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("config")) {
     if (doc["demo_mode"].is<bool>()) demo_mode = doc["demo_mode"].as<bool>();
     if (doc["goal_ml"].is<float>()) goal_ml = doc["goal_ml"].as<float>();

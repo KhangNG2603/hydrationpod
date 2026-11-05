@@ -48,6 +48,7 @@ latest_telemetry = {
     "alert_level": 0,
     "profile": "STANDARD",
     "vibration_motor": 0,
+    "ringtone": "CHIME",
     "wifi_connected": True,
     "wifi_rssi": -45,
     "uptime_sec": 0,
@@ -461,7 +462,16 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             broadcast_sse(latest_telemetry)
             response_data = {"status": "success", "message": f"Refilled +{int(amount)}ml", "bottle_ml": latest_telemetry['bottle_ml']}
 
-        # 7. POST /api/reset
+        # 7. POST /api/ringtone (Change Ringtone Style)
+        elif self.path.startswith('/api/ringtone'):
+            r_tone = body_json.get('tone', body_json.get('ringtone', 'CHIME')).upper()
+            latest_telemetry['ringtone'] = r_tone
+            latest_telemetry['last_event'] = f"Ringtone set to {r_tone}"
+            publish_to_mqtt({"target": "ringtone", "tone": r_tone, "preview": True})
+            broadcast_sse(latest_telemetry)
+            response_data = {"status": "success", "ringtone": r_tone, "mqtt_published": True}
+
+        # 8. POST /api/reset
         elif self.path.startswith('/api/reset'):
             latest_telemetry['drank_today_ml'] = 0
             latest_telemetry['bottle_ml'] = 500

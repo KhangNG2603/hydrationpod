@@ -15,7 +15,8 @@ let state = {
   user_role: 'caregiver', // 'caregiver' or 'patient'
   is_mqtt_connected: false,
   is_emergency_acked: false,
-  has_alerted_empty: false
+  has_alerted_empty: false,
+  ringtone: 'CHIME'
 };
 
 // Audio Synthesizer
@@ -39,6 +40,72 @@ function playTone(freq, type = 'sine', dur = 0.15) {
     gain.connect(audioCtx.destination);
     osc.start();
     osc.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+}
+
+// Play distinctive melody based on chosen ringtone style
+function playRingtoneMelody(style) {
+  try {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+
+    if (style === 'MELODIC') {
+      // 3 melodic notes C5 (523) -> E5 (659) -> G5 (784)
+      [523, 659, 784].forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, now + i * 0.12);
+        gain.gain.setValueAtTime(0.14, now + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.15);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.12);
+        osc.stop(now + i * 0.12 + 0.15);
+      });
+    } else if (style === 'DIGITAL') {
+      // High-tech staccato double-beep 2093Hz
+      [0, 0.08].forEach(delay => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(2093, now + delay);
+        gain.gain.setValueAtTime(0.08, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.05);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + 0.05);
+      });
+    } else if (style === 'SIREN') {
+      // Sweeping medical siren tone 1400Hz -> 2400Hz
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(1400, now);
+      osc.frequency.linearRampToValueAtTime(2400, now + 0.22);
+      gain.gain.setValueAtTime(0.10, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } else {
+      // CHIME (Default gentle two-tone chime 784Hz -> 1046Hz)
+      [784, 1046].forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now + i * 0.14);
+        gain.gain.setValueAtTime(0.15, now + i * 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.14 + 0.18);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.14);
+        osc.stop(now + i * 0.14 + 0.18);
+      });
+    }
   } catch (e) {}
 }
 
@@ -203,6 +270,7 @@ function updateDataFromESP32(data) {
   if (data.alert_level !== undefined) state.alert_level = data.alert_level;
   if (data.profile !== undefined) state.profile = data.profile;
   if (data.vibration_motor !== undefined) state.vibration_motor = data.vibration_motor;
+  if (data.ringtone !== undefined) state.ringtone = data.ringtone;
 
   if (state.drank !== prevDrank) {
     addChartPoint(state.drank);
@@ -346,6 +414,17 @@ function updateUI() {
     document.getElementById('btn-gout').classList.add('active');
   }
 
+  // Update ringtone buttons active state
+  document.querySelectorAll('.btn-tone').forEach(b => b.classList.remove('active'));
+  const toneMap = {
+    'CHIME': 'tone-chime',
+    'MELODIC': 'tone-melodic',
+    'DIGITAL': 'tone-digital',
+    'SIREN': 'tone-siren'
+  };
+  const activeToneBtn = document.getElementById(toneMap[state.ringtone] || 'tone-chime');
+  if (activeToneBtn) activeToneBtn.classList.add('active');
+
   updateLEDs();
 }
 
@@ -470,6 +549,21 @@ function refillBottle(amount = 350) {
   setTimeout(() => playTone(1200, 'sine', 0.2), 150);
   sendCommand({ target: 'refill', amount: amount });
   updateUI();
+}
+
+// --- RINGTONE STYLE HANDLERS (Tùy biến tiếng chuông) ---
+function selectRingtone(tone) {
+  state.ringtone = tone;
+  updateUI();
+  playRingtoneMelody(tone);
+  log(`🔔 [ĐỔI TIẾNG CHUÔNG]: Đã đổi kiểu chuông sang ${tone}`, 'info');
+  sendCommand({ target: 'ringtone', tone: tone });
+}
+
+function previewSelectedRingtone() {
+  playRingtoneMelody(state.ringtone);
+  log(`🔊 [NGHE THỬ CHUÔNG]: Đang phát chuông ${state.ringtone}...`, 'info');
+  sendCommand({ target: 'ringtone', tone: state.ringtone, preview: true });
 }
 
 // --- DEMO SCENARIOS ---

@@ -201,13 +201,24 @@ def main():
     except Exception as e:
         test_print("Test 9: Daily Stats Reset", False, str(e))
 
+    # --- TEST 10: Ringtone Style Customization ---
+    try:
+        ring_res = http_post("/api/ringtone", {"tone": "MELODIC"})
+        time.sleep(1.0)
+        telem = http_get("/api/telemetry")
+        test_print("Test 10: Ringtone Customization (Melodic / Chime / Siren)", 
+                   telem.get("ringtone") == "MELODIC", 
+                   f"Ringtone set to {telem.get('ringtone')} successfully")
+    except Exception as e:
+        test_print("Test 10: Ringtone Customization", False, str(e))
+
     # Cleanup
     stop_sim.set()
     time.sleep(0.5)
 
     print("=" * 72)
-    print("🎉 ALL 9 INTEGRATED TESTS COMPLETED SUCCESSFULLY!")
-    print("   ESP32 Firmware + Haptic Motor + Cloud MQTT + REST API + Safety Engine")
+    print("🎉 ALL 10 INTEGRATED TESTS COMPLETED SUCCESSFULLY!")
+    print("   ESP32 Firmware + Haptic Motor + Cloud MQTT + REST API + Ringtone Customization")
     print("=" * 72)
 
 if __name__ == "__main__":

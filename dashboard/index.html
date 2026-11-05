@@ -163,6 +163,50 @@
             <input type="range" min="500" max="2500" step="50" value="1000" id="cap-slider" oninput="onCapSliderChange(this.value)">
           </div>
 
+          <!-- Ringtone Melody Selector (Tùy biến tiếng chuông) -->
+          <div class="control-group ringtone-group">
+            <div class="ringtone-header">
+              <label class="control-lbl">3. Kiểu Tiếng Chuông Báo (Ringtone Melody):</label>
+              <button class="btn-preview-tone" onclick="previewSelectedRingtone()" title="Nghe thử âm thanh chuông đã chọn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                <span>Nghe Thử</span>
+              </button>
+            </div>
+            <div class="ringtone-grid">
+              <button class="btn-tone active" id="tone-chime" onclick="selectRingtone('CHIME')">
+                <span class="tone-icon">🔔</span>
+                <span class="tone-info">
+                  <strong>Nhẹ Nhàng</strong>
+                  <small>Chime êm ái</small>
+                </span>
+              </button>
+              <button class="btn-tone" id="tone-melodic" onclick="selectRingtone('MELODIC')">
+                <span class="tone-icon">🎵</span>
+                <span class="tone-info">
+                  <strong>Giai Điệu</strong>
+                  <small>Du dương Arpeggio</small>
+                </span>
+              </button>
+              <button class="btn-tone" id="tone-digital" onclick="selectRingtone('DIGITAL')">
+                <span class="tone-icon">⚡</span>
+                <span class="tone-info">
+                  <strong>Kỹ Thuật Số</strong>
+                  <small>Beep điện tử</small>
+                </span>
+              </button>
+              <button class="btn-tone" id="tone-siren" onclick="selectRingtone('SIREN')">
+                <span class="tone-icon">🚨</span>
+                <span class="tone-info">
+                  <strong>Còi Y Tế</strong>
+                  <small>Siren dồn dập</small>
+                </span>
+              </button>
+            </div>
+          </div>
+
           <!-- Interactive Action Buttons -->
           <div class="control-actions-grid">
             <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()" title="Bật/Tắt còi báo động khẩn cấp (Virtual Pin 7)">

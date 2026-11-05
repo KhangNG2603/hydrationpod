@@ -591,6 +591,89 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
 }
 
+/* Ringtone Melody Selector */
+.ringtone-group {
+  margin-top: 14px;
+}
+
+.ringtone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-preview-tone {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-preview-tone:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.ringtone-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.btn-tone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--card-border);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.btn-tone:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-tone.active {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #c084fc;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
+}
+
+.btn-tone .tone-icon {
+  font-size: 1.2rem;
+}
+
+.btn-tone .tone-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.btn-tone strong {
+  font-size: 0.82rem;
+  color: #fff;
+}
+
+.btn-tone small {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 /* Control Actions Grid */
 .control-actions-grid {
   display: grid;
