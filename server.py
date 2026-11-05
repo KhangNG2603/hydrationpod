@@ -226,6 +226,30 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(help_data, indent=2).encode('utf-8'))
             return
 
+        # 4. Serve Postman Collection JSON directly
+        elif self.path.startswith('/postman_collection.json'):
+            col_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'postman_collection.json')
+            if os.path.exists(col_path):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self._send_cors_headers()
+                self.end_headers()
+                with open(col_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+
+        # 5. Serve OpenAPI 3.0 Specification JSON directly
+        elif self.path.startswith('/openapi.json'):
+            oa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'openapi.json')
+            if os.path.exists(oa_path):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self._send_cors_headers()
+                self.end_headers()
+                with open(oa_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
+
         super().do_GET()
 
     def do_POST(self):

@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "hydropod-iot-collection-v1",
+    "_postman_id": "2ffebf72-e61a-412f-ab94-14b6c4afe760",
     "name": "Smart Hydration Pod - IoT Test Suite",
     "description": "Bộ kịch bản kiểm thử HTTP REST API & MQTT Bridge cho đồ án Smart Hydration Pod.\nPhù hợp kiểm thử độc lập qua Postman và đồng bộ trực tiếp với mô phỏng Wokwi ESP32 & Web Dashboard.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -21,12 +21,12 @@
               "port": "8000",
               "path": ["api", "telemetry"]
             },
-            "description": "Lấy toàn bộ thông số thời gian thực: lượng nước đã uống (V0), dung tích còn lại (V1), % hoàn thành (V4), pin (V5), trạng thái an toàn."
+            "description": "Lấy toàn bộ thông số thời gian thực: lượng nước đã uống (V0), dung tích còn lại (V1), % hoàn thành (V4), pin (V5), trạng thái bộ rung, an toàn."
           },
           "response": []
         },
         {
-          "name": "GET API Documentation & Routes",
+          "name": "GET API Help & Routes",
           "request": {
             "method": "GET",
             "header": [],
@@ -47,6 +47,36 @@
       "name": "2. Điều Khiển & Nạp Dịch (Commands)",
       "item": [
         {
+          "name": "POST Test Vibration Motor (Bộ rung nhắc nhở)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"duration_ms\": 300\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8000/api/vibrate",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["api", "vibrate"]
+            },
+            "description": "Kích hoạt kiểm thử bộ rung xúc giác trên Smart Bottle qua Cloud MQTT."
+          },
+          "response": []
+        },
+        {
           "name": "POST Drink Water (+150ml)",
           "request": {
             "method": "POST",
@@ -58,7 +88,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amount_ml\": 150\n}"
+              "raw": "{\n  \"amount_ml\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/drink",
@@ -83,7 +118,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"profile\": \"HEART_FAILURE\",\n  \"hard_cap\": 1000\n}"
+              "raw": "{\n  \"profile\": \"HEART_FAILURE\",\n  \"hard_cap\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/profile",
@@ -108,7 +148,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"profile\": \"STANDARD\"\n}"
+              "raw": "{\n  \"profile\": \"STANDARD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/profile",
@@ -133,7 +178,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"action\": \"MUTE\"\n}"
+              "raw": "{\n  \"action\": \"MUTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/alarm",
@@ -143,31 +193,6 @@
               "path": ["api", "alarm"]
             },
             "description": "Tạm thời tắt chuông còi báo động trên phần cứng ESP32."
-          },
-          "response": []
-        },
-        {
-          "name": "POST Test Vibration Motor (Bộ rung nhắc nhở)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"duration_ms\": 300\n}"
-            },
-            "url": {
-              "raw": "http://localhost:8000/api/vibrate",
-              "protocol": "http",
-              "host": ["localhost"],
-              "port": "8000",
-              "path": ["api", "vibrate"]
-            },
-            "description": "Kích hoạt kiểm thử bộ rung xúc giác trên Smart Bottle qua Cloud MQTT."
           },
           "response": []
         },
@@ -183,7 +208,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/reset",
@@ -213,7 +243,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_1\"\n}"
+              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/command",
@@ -222,7 +257,7 @@
               "port": "8000",
               "path": ["api", "command"]
             },
-            "description": "Kích hoạt Demo 1: Nạp 150ml, LED xanh, chuông xác nhận."
+            "description": "Kích hoạt Demo 1: Nạp 150ml, LED xanh, chuông xác nhận, rung haptic."
           },
           "response": []
         },
@@ -238,7 +273,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_2\"\n}"
+              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/command",
@@ -247,7 +287,7 @@
               "port": "8000",
               "path": ["api", "command"]
             },
-            "description": "Kích hoạt Demo 2: Cảnh báo quên uống nước sau 35s không vận động."
+            "description": "Kích hoạt Demo 2: Cảnh báo quên uống nước sau 35s không vận động (Rung đôi + chuông)."
           },
           "response": []
         },
@@ -263,7 +303,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_3\"\n}"
+              "raw": "{\n  \"command\": \"SIM_DEMO_SCENARIO_3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "http://localhost:8000/api/command",

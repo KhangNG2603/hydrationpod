@@ -1,0 +1,200 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Smart Hydration Pod - IoT REST API",
+    "description": "API điều khiển và giám sát cho bình nước thông minh Smart Hydration Pod (ESP32 + MQTT Bridge).",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local API & MQTT Bridge Server"
+    }
+  ],
+  "paths": {
+    "/api/telemetry": {
+      "get": {
+        "summary": "Lấy toàn bộ thông số thời gian thực",
+        "description": "Trả về dữ liệu cảm biến: lượng nước đã uống, dung tích bình, pin, trạng thái rung, an toàn.",
+        "responses": {
+          "200": {
+            "description": "Dữ liệu Telemetry thời gian thực thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/help": {
+      "get": {
+        "summary": "Xem danh sách API routes",
+        "responses": {
+          "200": {
+            "description": "Tài liệu danh sách endpoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vibrate": {
+      "post": {
+        "summary": "Kích hoạt kiểm thử bộ rung xúc giác (Haptic Motor)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "duration_ms": {
+                    "type": "integer",
+                    "default": 300,
+                    "example": 300
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã gửi lệnh rung xuống thiết bị qua MQTT"
+          }
+        }
+      }
+    },
+    "/api/drink": {
+      "post": {
+        "summary": "Mô phỏng uống nước (+150ml)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount_ml": {
+                    "type": "number",
+                    "default": 150,
+                    "example": 150
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã ghi nhận lượng nước nạp"
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "post": {
+        "summary": "Chỉ định phác đồ y tế (STANDARD, HEART_FAILURE, GOUT)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "profile": {
+                    "type": "string",
+                    "enum": ["STANDARD", "HEART_FAILURE", "GOUT"],
+                    "example": "HEART_FAILURE"
+                  },
+                  "hard_cap": {
+                    "type": "number",
+                    "example": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã cập nhật phác đồ điều trị"
+          }
+        }
+      }
+    },
+    "/api/alarm": {
+      "post": {
+        "summary": "Bật/Tắt chuông còi báo động (MUTE / UNMUTE)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["MUTE", "UNMUTE"],
+                    "example": "MUTE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trạng thái còi báo động đã thay đổi"
+          }
+        }
+      }
+    },
+    "/api/reset": {
+      "post": {
+        "summary": "Reset dữ liệu nạp dịch ngày",
+        "responses": {
+          "200": {
+            "description": "Đã reset bộ đếm về 0"
+          }
+        }
+      }
+    },
+    "/api/command": {
+      "post": {
+        "summary": "Kích hoạt kịch bản demo (Scenario 1, 2, 3)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "enum": ["SIM_DEMO_SCENARIO_1", "SIM_DEMO_SCENARIO_2", "SIM_DEMO_SCENARIO_3"],
+                    "example": "SIM_DEMO_SCENARIO_1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kịch bản demo đã được thực thi"
+          }
+        }
+      }
+    }
+  }
+}
