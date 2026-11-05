@@ -10,11 +10,19 @@
  * 3. Thuật toán FSM Y Tế (Finite State Machine):
  *    - STATE_REST: Bình đặt yên trên bàn, cân HX711 cập nhật liên tục với bộ lọc Moving Average (N=10).
  *    - STATE_LIFTED_DRINKING: Khi MPU6050 phát hiện nghiêng > 35°, chuyển sang chế độ uống, KHÓA CÂN (Hold State) chống rung lắc nước.
- *    - STATE_SETTLING: Khi đặt bình trở lại bàn, chờ nước và gia tốc ổn định trong 1.2s.
+ *    - STATE_SETTLING: Khi đặt bình trở lại bàn, chờ nước và gia tốc ổn định trong 1.0s.
  *    - STATE_EVALUATE: Đo trọng lượng mới. Nếu giảm >= 25g -> Ghi nhận UỐNG NƯỚC; nếu tăng >= 40g -> Ghi nhận CHÂM NƯỚC (Refill).
- * 4. Cảnh báo quên uống nước tự động bằng Timer non-blocking (millis).
+ * 4. Bộ rung nhắc nhở xúc giác (Haptic Vibration Motor):
+ *    - Quên uống Cấp 2: Rung đôi (Haptic Double-pulse: 150ms ON, 100ms OFF, 150ms ON) chu kỳ 3s.
+ *    - Quên uống Cấp 3: Rung dồn dập (Triple-pulse: 180ms ON, 80ms OFF x3) chu kỳ 2s.
+ *    - Khẩn cấp Overcap: Rung liên tục (250ms ON / 150ms OFF).
+ *    - Xác nhận ngụm uống thành công: Haptic click êm ái (80ms).
  * 5. Cảnh báo an toàn kép Y Tế (Dual Safety Margin: 80% Vàng, 90% Đỏ, 100% Báo động khẩn cấp).
- * 6. Giao thức IoT 2 chiều: MQTT Publish Telemetry JSON, Subscribe lệnh từ Bác sĩ/Dashboard, phản hồi ACK.
+ * 6. Giao thức Cloud IoT 2 chiều hoàn chỉnh:
+ *    - Tự động duy trì & kết nối lại Wi-Fi và MQTT Broker (non-blocking state machine).
+ *    - LWT (Last Will & Testament) topic trạng thái thiết bị ONLINE/OFFLINE.
+ *    - MQTT Telemetry JSON (dung tích, lượng đã uống, cảnh báo, trạng thái bộ rung, pin, wifi rssi).
+ *    - Nhận lệnh cấu hình Profile, điều khiển chuông, test bộ rung từ Cloud, phản hồi ACK tức thì.
  */
 
 #include <Arduino.h>
@@ -36,7 +44,7 @@
 #define NEOPIXEL_PIN     15
 #define NUMPIXELS        8
 #define BUZZER_PIN       4
-#define MOTOR_PIN        5
+#define MOTOR_PIN        5      // Bộ rung nhắc nhở (Haptic Vibration Motor)
 #define BAT_ADC_PIN      34
 
 #define SCREEN_WIDTH     128
@@ -44,7 +52,7 @@
 #define OLED_RESET       -1
 #define OLED_ADDRESS     0x3C
 
-// --- WI-FI & MQTT CONFIGURATION ---
+// --- WI-FI & MQTT CLOUD CONFIGURATION ---
 const char* WIFI_SSID     = "Wokwi-GUEST";
 const char* WIFI_PASS     = "";
 const char* MQTT_BROKER   = "broker.emqx.io";
@@ -54,6 +62,7 @@ const char* DEVICE_ID     = "HYDROPOD_01";
 const char* TOPIC_TELEMETRY = "smartbottle/HYDROPOD_01/telemetry";
 const char* TOPIC_CONTROL   = "smartbottle/HYDROPOD_01/control";
 const char* TOPIC_ACK       = "smartbottle/HYDROPOD_01/ack";
+const char* TOPIC_STATUS    = "smartbottle/HYDROPOD_01/status";
 
 // --- HARDWARE & NETWORK OBJECTS ---
 HX711 scale;
@@ -70,6 +79,22 @@ enum ProfileType {
   PROFILE_HEART_FAILURE,   // Suy tim / Suy thận (Hard Cap 1000ml, max 150ml/h, nhắc 45 phút)
   PROFILE_GOUT             // Sỏi thận / Gout (Mục tiêu 2500ml, nhắc 30 phút)
 };
+
+// --- VIBRATION MOTOR PATTERNS ---
+enum VibrationPattern {
+  VIBE_NONE = 0,
+  VIBE_CLICK_CONFIRM,      // 1 single short pulse 80ms (xác nhận uống nước thành công)
+  VIBE_REFILL_CONFIRM,     // 2 quick clicks 60ms (xác nhận châm nước)
+  VIBE_DOUBLE_PULSE,       // 2 pulses: 150ms ON, 100ms OFF, 150ms ON, nghỉ 2.5s (Nhắc nhở Cấp 2)
+  VIBE_TRIPLE_URGENT,      // 3 rapid pulses: 180ms ON, 80ms OFF x3, nghỉ 1.3s (Nhắc nhở Cấp 3)
+  VIBE_EMERGENCY_ALARM,    // Continuous rapid pulsing: 250ms ON, 150ms OFF (Vượt trần y tế)
+  VIBE_CUSTOM_ONCE         // 1 single pulse với độ dài tùy chọn (từ Cloud test)
+};
+
+VibrationPattern currentVibePattern = VIBE_NONE;
+bool is_vibrating = false;
+unsigned long vibeStartTime = 0;
+unsigned long customVibeDuration = 0;
 
 // --- SYSTEM STATE & DATA ---
 ProfileType currentProfile = PROFILE_STANDARD;
@@ -119,6 +144,7 @@ FSMState fsmState = STATE_REST;
 
 // --- FUNCTION PROTOTYPES ---
 void setupWiFi();
+void maintainNetwork();
 void connectMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void sendAck(const char* command, const char* status, const char* detail);
@@ -127,6 +153,9 @@ void readSensors();
 void processFSM();
 void updateSafetyStatus();
 void handleAlertOutputs();
+void setVibrationPattern(VibrationPattern pattern);
+void triggerSingleVibe(unsigned long durationMs);
+void updateVibration();
 void updateOLEDDisplay();
 void sendTelemetryJSON();
 void processSerialInput();
@@ -147,6 +176,11 @@ void setup() {
   setPixelColorAll(pixels.Color(0, 150, 255)); // Startup Cyan
   pixels.show();
 
+  // Test vibration motor briefly on boot
+  digitalWrite(MOTOR_PIN, HIGH);
+  delay(100);
+  digitalWrite(MOTOR_PIN, LOW);
+
   // Initialize OLED
   Wire.begin(21, 22);
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
@@ -158,7 +192,7 @@ void setup() {
     display.setCursor(10, 15);
     display.println(F("Smart Hydration"));
     display.setCursor(35, 30);
-    display.println(F("Pod v2.0"));
+    display.println(F("Pod v2.5 Cloud"));
     display.setCursor(10, 48);
     display.println(F("Connecting WiFi..."));
     display.display();
@@ -203,56 +237,54 @@ void setup() {
   setupWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  mqttClient.setBufferSize(512); // Buffer size 512B for full telemetry JSON
 
-  delay(500);
+  delay(400);
   setPixelColorAll(pixels.Color(0, 0, 0));
   pixels.show();
   Serial.println(F("System Ready. All events triggered 100% by HX711 & MPU6050 sensors."));
 }
 
 void loop() {
-  // Maintain Wi-Fi and MQTT non-blocking
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!mqttClient.connected()) {
-      static unsigned long lastMqttRetry = 0;
-      if (millis() - lastMqttRetry > 5000) {
-        lastMqttRetry = millis();
-        connectMQTT();
-      }
-    } else {
-      mqttClient.loop();
-    }
-  }
+  // 1. Maintain Wi-Fi and MQTT Cloud connections (non-blocking)
+  maintainNetwork();
 
-  // 1. Read real sensors (HX711 & MPU6050)
+  // 2. Read real sensors (HX711 & MPU6050)
   readSensors();
 
-  // 2. Process FSM Event Engine
+  // 3. Process FSM Event Engine
   processFSM();
 
-  // 3. Evaluate medical safety margins
+  // 4. Evaluate medical safety margins
   updateSafetyStatus();
 
-  // 4. Update Audio / Visual Alert outputs
+  // 5. Update Audio / Visual Alert outputs
   handleAlertOutputs();
 
-  // 5. Update OLED Screen
-  updateOLEDDisplay();
+  // 6. Non-blocking Haptic Vibration Motor Controller
+  updateVibration();
 
-  // 6. Non-blocking Telemetry publish (every 3 seconds)
+  // 7. Non-blocking OLED Screen update (every 100ms)
+  static unsigned long lastOled = 0;
+  if (millis() - lastOled >= 100) {
+    lastOled = millis();
+    updateOLEDDisplay();
+  }
+
+  // 8. Non-blocking Telemetry publish (every 3 seconds)
   static unsigned long lastTelemetry = 0;
   if (millis() - lastTelemetry >= 3000) {
     lastTelemetry = millis();
     sendTelemetryJSON();
   }
 
-  // 7. Process Serial Commands (debugging / fallback)
+  // 9. Process Serial Commands (debugging / fallback)
   processSerialInput();
 
-  delay(20);
+  delay(10);
 }
 
-// --- WI-FI SETUP ---
+// --- WI-FI SETUP & NON-BLOCKING MAINTENANCE ---
 void setupWiFi() {
   Serial.print(F("Connecting to WiFi: "));
   Serial.println(WIFI_SSID);
@@ -260,7 +292,7 @@ void setupWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   
   unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 3000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 4000) {
     delay(200);
     Serial.print(".");
   }
@@ -274,7 +306,32 @@ void setupWiFi() {
   }
 }
 
-// --- MQTT CONNECTION ---
+void maintainNetwork() {
+  // A. Non-blocking Wi-Fi auto-reconnect
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastWifiRetry = 0;
+    if (millis() - lastWifiRetry >= 5000) {
+      lastWifiRetry = millis();
+      Serial.println(F("🌐 [WiFi] Reconnecting in background..."));
+      WiFi.disconnect();
+      WiFi.begin(WIFI_SSID, WIFI_PASS);
+    }
+    return;
+  }
+
+  // B. Non-blocking MQTT auto-reconnect
+  if (!mqttClient.connected()) {
+    static unsigned long lastMqttRetry = 0;
+    if (millis() - lastMqttRetry >= 4000) {
+      lastMqttRetry = millis();
+      connectMQTT();
+    }
+  } else {
+    mqttClient.loop();
+  }
+}
+
+// --- MQTT CLOUD CONNECTION & LWT ---
 void connectMQTT() {
   Serial.print(F("Attempting MQTT connection to: "));
   Serial.println(MQTT_BROKER);
@@ -282,14 +339,27 @@ void connectMQTT() {
   String clientId = "ESP32_HydraPod_";
   clientId += String(random(0xffff), HEX);
 
-  if (mqttClient.connect(clientId.c_str())) {
+  // Set buffer size to 512 bytes for rich JSON payload
+  mqttClient.setBufferSize(512);
+
+  // Configure LWT (Last Will and Testament) payload
+  String lwtPayload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"status\":\"OFFLINE\"}";
+
+  if (mqttClient.connect(clientId.c_str(), 
+                         TOPIC_STATUS, 0, true, lwtPayload.c_str())) {
     Serial.println(F("🟢 MQTT Connected successfully!"));
+
+    // Subscribe to control commands from Doctor / Dashboard / Server
     mqttClient.subscribe(TOPIC_CONTROL);
     Serial.print(F("Subscribed to: "));
     Serial.println(TOPIC_CONTROL);
 
-    // Send online status
-    sendAck("DEVICE_ONLINE", "SUCCESS", "ESP32 Hydration Pod ready on MQTT");
+    // Publish Retained Online Status
+    String onlinePayload = "{\"device_id\":\"" + String(DEVICE_ID) + "\",\"status\":\"ONLINE\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+    mqttClient.publish(TOPIC_STATUS, onlinePayload.c_str(), true);
+
+    // Send online status & initial telemetry
+    sendAck("DEVICE_ONLINE", "SUCCESS", "ESP32 Hydration Pod ready on Cloud MQTT");
     sendTelemetryJSON();
   } else {
     Serial.print(F("❌ MQTT connect failed, rc="));
@@ -409,10 +479,11 @@ void processFSM() {
           Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml)\n", 
                         (int)drank, (int)total_drank_today_ml);
 
-          // Visual & Audio Confirmation
+          // Visual & Audio Confirmation + Haptic Click Confirmation
           setPixelColorAll(pixels.Color(0, 255, 0)); // Green ring
           pixels.show();
           tone(BUZZER_PIN, 1046, 250);
+          triggerSingleVibe(90); // 90ms gentle tactile vibration feedback
 
           sendAck("SENSOR_DRINK", "SUCCESS", lastEventLog.c_str());
           sendTelemetryJSON();
@@ -428,6 +499,7 @@ void processFSM() {
           setPixelColorAll(pixels.Color(0, 150, 255)); // Cyan ring
           pixels.show();
           tone(BUZZER_PIN, 800, 150);
+          setVibrationPattern(VIBE_REFILL_CONFIRM); // 2 quick tactile pulses
 
           sendAck("SENSOR_REFILL", "SUCCESS", lastEventLog.c_str());
           sendTelemetryJSON();
@@ -473,94 +545,225 @@ void updateSafetyStatus() {
   } else if (idle_sec >= effective_remind_sec + 15.0) {
     currentAlertLevel = 2; // Moderate Idle
   } else if (idle_sec >= effective_remind_sec) {
-    currentAlertLevel = 1; // Mild Idle
+    currentAlertLevel = 1; // Mild Idle (Breathing LED)
   } else {
     currentAlertLevel = 0; // Normal
   }
 }
 
-// --- ALERT OUTPUTS (LEDS / BUZZER / MOTOR) ---
-void handleAlertOutputs() {
-  if (is_alarm_muted) {
-    digitalWrite(BUZZER_PIN, LOW);
+// --- VIBRATION MOTOR CONTROLLER (HAPTIC ENGINE) ---
+void setVibrationPattern(VibrationPattern pattern) {
+  if (currentVibePattern != pattern) {
+    currentVibePattern = pattern;
+    vibeStartTime = millis();
+  }
+}
+
+void triggerSingleVibe(unsigned long durationMs) {
+  currentVibePattern = VIBE_CUSTOM_ONCE;
+  customVibeDuration = durationMs;
+  vibeStartTime = millis();
+  digitalWrite(MOTOR_PIN, HIGH);
+  is_vibrating = true;
+}
+
+void updateVibration() {
+  // If muted and not a confirmation click, turn motor off
+  if (is_alarm_muted && currentVibePattern != VIBE_CLICK_CONFIRM && currentVibePattern != VIBE_CUSTOM_ONCE) {
     digitalWrite(MOTOR_PIN, LOW);
+    is_vibrating = false;
+    return;
   }
 
+  unsigned long elapsed = millis() - vibeStartTime;
+
+  switch (currentVibePattern) {
+    case VIBE_NONE:
+      digitalWrite(MOTOR_PIN, LOW);
+      is_vibrating = false;
+      break;
+
+    case VIBE_CLICK_CONFIRM:
+      // Single 80ms tactile pulse
+      if (elapsed < 80) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+        currentVibePattern = VIBE_NONE;
+      }
+      break;
+
+    case VIBE_REFILL_CONFIRM:
+      // 2 quick 60ms pulses (0..60 ON, 60..120 OFF, 120..180 ON)
+      if ((elapsed < 60) || (elapsed >= 120 && elapsed < 180)) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else if (elapsed < 180) {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+        currentVibePattern = VIBE_NONE;
+      }
+      break;
+
+    case VIBE_CUSTOM_ONCE:
+      if (elapsed < customVibeDuration) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+        currentVibePattern = VIBE_NONE;
+      }
+      break;
+
+    case VIBE_DOUBLE_PULSE: {
+      // Repeat cycle: 150ms ON, 100ms OFF, 150ms ON, 2600ms OFF (Total 3000ms cycle)
+      unsigned long cycleTime = elapsed % 3000;
+      if (cycleTime < 150 || (cycleTime >= 250 && cycleTime < 400)) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+      }
+      break;
+    }
+
+    case VIBE_TRIPLE_URGENT: {
+      // Repeat cycle: 180ms ON, 80ms OFF, 180ms ON, 80ms OFF, 180ms ON, 1300ms OFF (Total 2000ms cycle)
+      unsigned long cycleTime = elapsed % 2000;
+      if (cycleTime < 180 || (cycleTime >= 260 && cycleTime < 440) || (cycleTime >= 520 && cycleTime < 700)) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+      }
+      break;
+    }
+
+    case VIBE_EMERGENCY_ALARM: {
+      // Continuous urgent alarm pulse: 250ms ON, 150ms OFF
+      unsigned long cycleTime = elapsed % 400;
+      if (cycleTime < 250) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+      }
+      break;
+    }
+  }
+}
+
+// --- ALERT OUTPUTS (LEDS & AUDIO BUZZER) ---
+void handleAlertOutputs() {
   // Emergency Overcap (Vượt trần y tế)
   if (currentSafety == SAFETY_EMERGENCY_OVERCAP) {
-    static bool toggle = false;
-    toggle = !toggle;
-    if (toggle) {
-      setPixelColorAll(pixels.Color(255, 0, 0));
-      if (!is_alarm_muted) {
-        tone(BUZZER_PIN, 2500, 150);
-        digitalWrite(MOTOR_PIN, HIGH);
+    setVibrationPattern(VIBE_EMERGENCY_ALARM);
+
+    static unsigned long lastFlash = 0;
+    static bool flashOn = false;
+    if (millis() - lastFlash >= 200) {
+      lastFlash = millis();
+      flashOn = !flashOn;
+      if (flashOn) {
+        setPixelColorAll(pixels.Color(255, 0, 0));
+        if (!is_alarm_muted) tone(BUZZER_PIN, 2500, 150);
+      } else {
+        setPixelColorAll(pixels.Color(0, 0, 0));
       }
-    } else {
-      setPixelColorAll(pixels.Color(0, 0, 0));
-      digitalWrite(MOTOR_PIN, LOW);
+      pixels.show();
     }
-    pixels.show();
     return;
   }
 
   // 90% Hard Cap (Red Warning)
   if (currentSafety == SAFETY_DANGER_RED) {
+    if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
+      setVibrationPattern(VIBE_NONE);
+    }
     setPixelColorAll(pixels.Color(255, 30, 0));
     pixels.show();
     return;
   } 
   // 80% Hard Cap (Yellow Warning)
   else if (currentSafety == SAFETY_APPROACH_YELLOW) {
+    if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
+      setVibrationPattern(VIBE_NONE);
+    }
     setPixelColorAll(pixels.Color(255, 180, 0));
     pixels.show();
     return;
   }
 
-  // Idle Alert Levels
+  // Idle Alert Levels (Quên uống nước)
   if (currentAlertLevel == 1) {
+    // Breathing amber LED, motor remains quiet
+    if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
+      setVibrationPattern(VIBE_NONE);
+    }
     static int breath = 0;
-    static int dir = 5;
-    breath += dir;
-    if (breath >= 180 || breath <= 10) dir = -dir;
-    setPixelColorAll(pixels.Color(breath, breath / 2, 0));
-    pixels.show();
-    digitalWrite(MOTOR_PIN, LOW);
+    static int dir = 4;
+    static unsigned long lastBreath = 0;
+    if (millis() - lastBreath >= 25) {
+      lastBreath = millis();
+      breath += dir;
+      if (breath >= 180 || breath <= 10) dir = -dir;
+      setPixelColorAll(pixels.Color(breath, breath / 2, 0));
+      pixels.show();
+    }
 
   } else if (currentAlertLevel == 2) {
-    static bool blink = false;
-    blink = !blink;
-    if (blink) {
-      setPixelColorAll(pixels.Color(255, 120, 0));
-      if (!is_alarm_muted) {
-        tone(BUZZER_PIN, 1200, 100);
-        digitalWrite(MOTOR_PIN, HIGH);
+    // Level 2: Double Pulse Vibration + Periodic Chime + Orange Blink
+    setVibrationPattern(VIBE_DOUBLE_PULSE);
+
+    static unsigned long lastBlink = 0;
+    static bool blinkState = false;
+    if (millis() - lastBlink >= 500) {
+      lastBlink = millis();
+      blinkState = !blinkState;
+      if (blinkState) {
+        setPixelColorAll(pixels.Color(255, 120, 0));
+        if (!is_alarm_muted) tone(BUZZER_PIN, 1200, 80);
+      } else {
+        setPixelColorAll(pixels.Color(0, 0, 0));
       }
-    } else {
-      setPixelColorAll(pixels.Color(0, 0, 0));
-      digitalWrite(MOTOR_PIN, LOW);
+      pixels.show();
     }
-    pixels.show();
 
   } else if (currentAlertLevel == 3) {
-    static bool rapid = false;
-    rapid = !rapid;
-    if (rapid) {
-      setPixelColorAll(pixels.Color(255, 0, 50));
-      if (!is_alarm_muted) {
-        tone(BUZZER_PIN, 1800, 150);
-        digitalWrite(MOTOR_PIN, HIGH);
+    // Level 3: Urgent Triple Pulse Vibration + Rapid Chime + Red/Orange Blink
+    setVibrationPattern(VIBE_TRIPLE_URGENT);
+
+    static unsigned long lastRapid = 0;
+    static bool rapidState = false;
+    if (millis() - lastRapid >= 250) {
+      lastRapid = millis();
+      rapidState = !rapidState;
+      if (rapidState) {
+        setPixelColorAll(pixels.Color(255, 0, 60));
+        if (!is_alarm_muted) tone(BUZZER_PIN, 1800, 100);
+      } else {
+        setPixelColorAll(pixels.Color(0, 0, 0));
       }
-    } else {
-      setPixelColorAll(pixels.Color(0, 0, 0));
-      digitalWrite(MOTOR_PIN, LOW);
+      pixels.show();
     }
-    pixels.show();
 
   } else {
-    // Normal resting state: LED off or subtle glow
+    // Normal resting state
+    if (currentVibePattern != VIBE_CUSTOM_ONCE && 
+        currentVibePattern != VIBE_CLICK_CONFIRM && 
+        currentVibePattern != VIBE_REFILL_CONFIRM) {
+      setVibrationPattern(VIBE_NONE);
+    }
     setPixelColorAll(pixels.Color(0, 0, 0));
-    digitalWrite(MOTOR_PIN, LOW);
     pixels.show();
   }
 }
@@ -594,7 +797,9 @@ void updateOLEDDisplay() {
   display.setCursor(0, 38);
   display.print(F("Bat:"));
   display.print(battery_soc_pct);
-  display.print(F("% Idle:"));
+  display.print(F("% Vib:"));
+  display.print(is_vibrating ? "ON " : "OFF");
+  display.print(F(" "));
   display.print((int)idle_s);
   display.print(F("s"));
 
@@ -618,7 +823,7 @@ void updateOLEDDisplay() {
   display.display();
 }
 
-// --- TELEMETRY JSON PUBLISH (Lab 1, 2 & BTVN 1) ---
+// --- TELEMETRY JSON PUBLISH (Cloud IoT 2-way sync) ---
 void sendTelemetryJSON() {
   JsonDocument doc;
   doc["device_id"] = DEVICE_ID;
@@ -643,6 +848,13 @@ void sendTelemetryJSON() {
                     (currentProfile == PROFILE_HEART_FAILURE ? "HEART_FAILURE" : "GOUT"));
   doc["last_event"] = lastEventLog;
 
+  // Real-time vibration motor state and cloud telemetry
+  doc["vibration_motor"] = is_vibrating ? 1 : 0;
+  doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
+  doc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+  doc["is_muted"] = is_alarm_muted;
+  doc["uptime_sec"] = (unsigned long)(millis() / 1000);
+
   String output;
   serializeJson(doc, output);
 
@@ -651,7 +863,7 @@ void sendTelemetryJSON() {
   }
 }
 
-// --- MQTT CALLBACK & JSON CONTROL PARSING (Lab 3, 4 & BTVN 2) ---
+// --- MQTT CALLBACK & JSON CONTROL PARSING (Cloud Commands) ---
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String message;
   for (unsigned int i = 0; i < length; i++) {
@@ -692,6 +904,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       is_alarm_muted = true;
       digitalWrite(BUZZER_PIN, LOW);
       digitalWrite(MOTOR_PIN, LOW);
+      is_vibrating = false;
       lastEventLog = "Alarm Muted Remotely";
       sendAck("ALARM_CONTROL", "SUCCESS", "Alarm Muted");
     } else {
@@ -700,7 +913,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       sendAck("ALARM_CONTROL", "SUCCESS", "Alarm Unmuted");
     }
   }
-  // 3. Remote Drink Command (Simulation from Doctor/Postman)
+  // 3. Vibration Motor Remote Command (Test / Haptic Trigger)
+  else if (doc["target"].is<const char*>() && (String(doc["target"].as<const char*>()).equalsIgnoreCase("vibrate") || 
+                                               String(doc["target"].as<const char*>()).equalsIgnoreCase("vibration"))) {
+    int duration = doc["duration_ms"].as<int>();
+    if (duration <= 0) duration = 300;
+    triggerSingleVibe(duration);
+    lastEventLog = "Remote Vibration Triggered (" + String(duration) + "ms)";
+    sendAck("VIBRATE_TEST", "SUCCESS", lastEventLog.c_str());
+  }
+  // 4. Remote Drink Command (Simulation from Doctor/Postman/Caregiver)
   else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("drink")) {
     float amt = doc["amount"].as<float>();
     if (amt <= 0) amt = 150.0;
@@ -712,10 +934,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     setPixelColorAll(pixels.Color(0, 255, 0));
     pixels.show();
     tone(BUZZER_PIN, 1046, 200);
+    triggerSingleVibe(100);
 
     sendAck("ADD_DRINK", "SUCCESS", lastEventLog.c_str());
   }
-  // 4. Reset Daily Stats
+  // 5. Reset Daily Stats
   else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("reset")) {
     total_drank_today_ml = 0;
     current_bottle_ml = 500;
@@ -723,7 +946,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     lastEventLog = "Remote Daily Reset";
     sendAck("RESET_DAY", "SUCCESS", "Daily counters reset to 0");
   }
-  // 5. Raw Command Strings
+  // 6. Device Configuration from Cloud
+  else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("config")) {
+    if (doc["demo_mode"].is<bool>()) demo_mode = doc["demo_mode"].as<bool>();
+    if (doc["goal_ml"].is<float>()) goal_ml = doc["goal_ml"].as<float>();
+    if (doc["remind_min"].is<float>()) base_remind_min = doc["remind_min"].as<float>();
+    lastEventLog = "Cloud Config Updated";
+    sendAck("SET_CONFIG", "SUCCESS", "Configuration applied");
+  }
+  // 7. Raw Command Strings
   else if (doc["command"].is<const char*>()) {
     String cmd = doc["command"].as<String>();
     if (cmd == "SIM_DEMO_SCENARIO_1") {
@@ -731,6 +962,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       current_bottle_ml = max(0.0f, current_bottle_ml - 150.0f);
       last_intake_timestamp = millis();
       lastEventLog = "Demo 1: Valid Drink +150ml";
+      triggerSingleVibe(100);
       sendAck("DEMO_1", "SUCCESS", lastEventLog.c_str());
     } else if (cmd == "SIM_DEMO_SCENARIO_2") {
       last_intake_timestamp = millis() - 35000;
@@ -741,12 +973,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       total_drank_today_ml = 1050;
       lastEventLog = "Demo 3: Overcap Emergency";
       sendAck("DEMO_3", "SUCCESS", lastEventLog.c_str());
+    } else if (cmd == "TEST_VIBRATION") {
+      triggerSingleVibe(300);
+      lastEventLog = "Test Vibration Motor 300ms";
+      sendAck("TEST_VIBRATION", "SUCCESS", lastEventLog.c_str());
     } else if (cmd == "RESET_DAY") {
       total_drank_today_ml = 0;
       current_bottle_ml = 500;
       last_intake_timestamp = millis();
       lastEventLog = "Reset Daily Stats";
       sendAck("RESET_DAY", "SUCCESS", "Reset complete");
+    } else {
+      sendAck("UNKNOWN_CMD", "FAILED", ("Unrecognized command: " + cmd).c_str());
     }
   }
 
@@ -755,7 +993,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   sendTelemetryJSON();
 }
 
-// --- FEEDBACK LOOP ACK (BTVN 3) ---
+// --- FEEDBACK LOOP ACK ---
 void sendAck(const char* command, const char* status, const char* detail) {
   JsonDocument ackDoc;
   ackDoc["device_id"] = DEVICE_ID;
@@ -766,6 +1004,7 @@ void sendAck(const char* command, const char* status, const char* detail) {
   ackDoc["safety_status"] = (currentSafety == SAFETY_NORMAL ? "NORMAL" :
                             (currentSafety == SAFETY_APPROACH_YELLOW ? "APPROACH_YELLOW" :
                             (currentSafety == SAFETY_DANGER_RED ? "DANGER_RED" : "EMERGENCY_OVERCAP")));
+  ackDoc["vibration_motor"] = is_vibrating ? 1 : 0;
   ackDoc["timestamp"] = millis();
 
   String ackPayload;
@@ -816,6 +1055,7 @@ void processSerialInput() {
       current_bottle_ml = max(0.0f, current_bottle_ml - 150.0f);
       last_intake_timestamp = millis();
       lastEventLog = "Serial: Drink +150ml";
+      triggerSingleVibe(90);
       sendAck("SERIAL_CMD_1", "SUCCESS", lastEventLog.c_str());
       sendTelemetryJSON();
     } else if (c == '2') {
@@ -828,6 +1068,11 @@ void processSerialInput() {
       total_drank_today_ml = 1050;
       lastEventLog = "Serial: Overcap Emergency";
       sendAck("SERIAL_CMD_3", "SUCCESS", lastEventLog.c_str());
+      sendTelemetryJSON();
+    } else if (c == 'v' || c == 'V') {
+      triggerSingleVibe(300);
+      lastEventLog = "Serial: Test Vibration 300ms";
+      sendAck("SERIAL_VIBE", "SUCCESS", lastEventLog.c_str());
       sendTelemetryJSON();
     } else if (c == 'r' || c == 'R') {
       total_drank_today_ml = 0;

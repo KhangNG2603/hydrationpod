@@ -10,6 +10,7 @@ let state = {
   battery_soc: 85,
   safety: 'NORMAL',
   alert_level: 0,
+  vibration_motor: 0,
   is_alarm_muted: false,
   user_role: 'caregiver', // 'caregiver' or 'patient'
   is_mqtt_connected: false
@@ -199,6 +200,7 @@ function updateDataFromESP32(data) {
   if (data.safety_status !== undefined) state.safety = data.safety_status;
   if (data.alert_level !== undefined) state.alert_level = data.alert_level;
   if (data.profile !== undefined) state.profile = data.profile;
+  if (data.vibration_motor !== undefined) state.vibration_motor = data.vibration_motor;
 
   if (state.drank !== prevDrank) {
     addChartPoint(state.drank);
@@ -221,6 +223,19 @@ function updateUI() {
   document.getElementById('val-bottle').innerHTML = `${Math.round(state.bottle)} <small>ml</small>`;
   document.getElementById('val-idle').innerHTML = `${state.idle_sec} <small>giây</small>`;
   document.getElementById('val-bat').innerHTML = `${state.battery_soc} <small>%</small>`;
+
+  const vibeEl = document.getElementById('val-vibe');
+  if (vibeEl) {
+    if (state.vibration_motor === 1 || state.vibration_motor === true) {
+      vibeEl.innerText = 'Đang rung';
+      vibeEl.style.color = '#f97316';
+      vibeEl.classList.add('vibrating');
+    } else {
+      vibeEl.innerText = 'Sẵn sàng';
+      vibeEl.style.color = 'var(--text-sub)';
+      vibeEl.classList.remove('vibrating');
+    }
+  }
 
   // Progress Bar
   const fill = document.getElementById('progress-fill');
@@ -372,6 +387,12 @@ function resetDay() {
   sendCommand({ target: 'reset' });
   addChartPoint(0);
   updateUI();
+}
+
+function testVibration() {
+  log('📳 [CLOUD LỆNH]: Kích hoạt kiểm thử bộ rung xúc giác (300ms)...', 'info');
+  playTone(800, 'sine', 0.12);
+  sendCommand({ target: 'vibrate', duration_ms: 300 });
 }
 
 // --- DEMO SCENARIOS ---

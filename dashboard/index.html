@@ -115,14 +115,17 @@
             <input type="range" min="500" max="2500" step="50" value="1000" id="cap-slider" oninput="onCapSliderChange(this.value)">
           </div>
 
-          <!-- Switch & Buttons: Mute / Reset (Lab 4: Widget Switch & Button) -->
+          <!-- Switch & Buttons: Mute / Vibrate Test / Reset (Lab 4: Widget Switch & Button) -->
           <div class="control-row">
             <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()">
-              <span class="btn-icon">🔕</span> <span id="txt-mute">Tắt Còi Báo Động</span>
+              <span class="btn-icon">🔕</span> <span id="txt-mute">Tắt Còi</span>
               <span class="vpin-badge-inline" title="Virtual Pin 7">V7</span>
             </button>
+            <button class="btn-action btn-vibe" id="btn-vibe" onclick="testVibration()" title="Kiểm thử bộ rung nhắc nhở qua Cloud">
+              <span class="btn-icon">📳</span> <span>Test Rung</span>
+            </button>
             <button class="btn-action btn-reset" onclick="resetDay()">
-              <span class="btn-icon">🔄</span> Reset Ngày
+              <span class="btn-icon">🔄</span> Reset
             </button>
           </div>
         </div>
@@ -130,7 +133,7 @@
 
       <!-- Right Column: Metrics, Charts, LED & Event Log -->
       <div class="right-col">
-        <!-- Quick Stats Grid (Virtual Pins V1, V3, V5) -->
+        <!-- Quick Stats Grid (Virtual Pins V1, V3, V5 & Haptic Motor) -->
         <div class="stats-row">
           <div class="card stat-card">
             <div class="stat-top">
@@ -152,6 +155,13 @@
               <span class="vpin-badge" title="Virtual Pin 5">V5</span>
             </div>
             <div class="stat-val" id="val-bat">85 <small>%</small></div>
+          </div>
+          <div class="card stat-card" id="card-vibe">
+            <div class="stat-top">
+              <span class="stat-lbl">Bộ Rung Nhắc Nhở</span>
+              <span class="vpin-badge" title="Bộ rung Haptic ESP32">Haptic</span>
+            </div>
+            <div class="stat-val" id="val-vibe" style="color: var(--text-sub);">Sẵn sàng</div>
           </div>
         </div>
 

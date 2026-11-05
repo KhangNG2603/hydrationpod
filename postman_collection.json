@@ -147,6 +147,31 @@
           "response": []
         },
         {
+          "name": "POST Test Vibration Motor (Bộ rung nhắc nhở)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"duration_ms\": 300\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8000/api/vibrate",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8000",
+              "path": ["api", "vibrate"]
+            },
+            "description": "Kích hoạt kiểm thử bộ rung xúc giác trên Smart Bottle qua Cloud MQTT."
+          },
+          "response": []
+        },
+        {
           "name": "POST Daily Reset",
           "request": {
             "method": "POST",

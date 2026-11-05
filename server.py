@@ -31,6 +31,7 @@ MQTT_PORT = 1883
 TOPIC_TELEMETRY = "smartbottle/HYDROPOD_01/telemetry"
 TOPIC_CONTROL   = "smartbottle/HYDROPOD_01/control"
 TOPIC_ACK       = "smartbottle/HYDROPOD_01/ack"
+TOPIC_STATUS    = "smartbottle/HYDROPOD_01/status"
 
 # Global System Telemetry State
 latest_telemetry = {
@@ -45,6 +46,10 @@ latest_telemetry = {
     "safety_status": "NORMAL",
     "alert_level": 0,
     "profile": "STANDARD",
+    "vibration_motor": 0,
+    "wifi_connected": True,
+    "wifi_rssi": -45,
+    "uptime_sec": 0,
     "last_event": "HTTP REST API Server Ready"
 }
 
@@ -96,7 +101,8 @@ def on_mqtt_connect(client, userdata, flags, rc, properties=None):
         print(f"🟢 [MQTT Connected] Connected to {MQTT_BROKER}:{MQTT_PORT}")
         client.subscribe(TOPIC_TELEMETRY)
         client.subscribe(TOPIC_ACK)
-        print(f"📥 [MQTT Subscribed] {TOPIC_TELEMETRY} & {TOPIC_ACK}")
+        client.subscribe(TOPIC_STATUS)
+        print(f"📥 [MQTT Subscribed] {TOPIC_TELEMETRY}, {TOPIC_ACK} & {TOPIC_STATUS}")
     else:
         print(f"❌ [MQTT Connection Failed] Return code {rc}")
 
@@ -105,7 +111,7 @@ def on_mqtt_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode('utf-8'))
         if msg.topic == TOPIC_TELEMETRY:
-            print(f"🔄 [MQTT Telemetry Received]: Drank={payload.get('drank_today_ml')}ml, Bottle={payload.get('bottle_ml')}ml, Safety={payload.get('safety_status')}")
+            print(f"🔄 [MQTT Telemetry Received]: Drank={payload.get('drank_today_ml')}ml, Bottle={payload.get('bottle_ml')}ml, Safety={payload.get('safety_status')}, Vib={payload.get('vibration_motor')}")
             for k, v in payload.items():
                 latest_telemetry[k] = v
             broadcast_sse(latest_telemetry)
@@ -113,6 +119,10 @@ def on_mqtt_message(client, userdata, msg):
             print(f"✅ [MQTT ACK Received]: Command={payload.get('command')} -> Status={payload.get('status')}")
             latest_telemetry["last_ack"] = payload
             broadcast_sse({"ack": payload, "current_telemetry": latest_telemetry})
+        elif msg.topic == TOPIC_STATUS:
+            print(f"📡 [MQTT Device Status]: Device={payload.get('device_id')} Status={payload.get('status')}")
+            latest_telemetry["device_online"] = (payload.get("status") == "ONLINE")
+            broadcast_sse({"device_status": payload, "current_telemetry": latest_telemetry})
     except Exception as e:
         print(f"⚠️ Error parsing MQTT message: {e}")
 
@@ -205,6 +215,7 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                     {"method": "POST", "url": "http://localhost:8000/api/drink", "body": {"amount_ml": 150}, "desc": "Mô phỏng nạp nước (gửi lệnh xuống ESP32)"},
                     {"method": "POST", "url": "http://localhost:8000/api/profile", "body": {"profile": "HEART_FAILURE", "hard_cap": 1000}, "desc": "Chỉ định phác đồ y tế (STANDARD, HEART_FAILURE, GOUT)"},
                     {"method": "POST", "url": "http://localhost:8000/api/alarm", "body": {"action": "MUTE"}, "desc": "Tắt/bật chuông cảnh báo (MUTE/UNMUTE)"},
+                    {"method": "POST", "url": "http://localhost:8000/api/vibrate", "body": {"duration_ms": 300}, "desc": "Kích hoạt kiểm thử bộ rung nhắc nhở (Haptic Vibration Motor)"},
                     {"method": "POST", "url": "http://localhost:8000/api/reset", "body": {}, "desc": "Reset dữ liệu nạp dịch ngày"}
                 ]
             }
@@ -328,7 +339,22 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             publish_to_mqtt({"target": "alarm", "action": action})
             response_data = {"status": "success", "alarm_action": action, "mqtt_published": True}
 
-        # 5. POST /api/reset
+        # 5. POST /api/vibrate (Trigger vibration motor test)
+        elif self.path.startswith('/api/vibrate'):
+            duration = int(body_json.get('duration_ms', body_json.get('duration', 300)))
+            pattern = body_json.get('pattern', 'CUSTOM')
+            latest_telemetry['vibration_motor'] = 1
+            latest_telemetry['last_event'] = f"Vibration Test Triggered ({duration}ms)"
+            publish_to_mqtt({"target": "vibrate", "duration_ms": duration, "pattern": pattern})
+            broadcast_sse(latest_telemetry)
+            response_data = {
+                "status": "success",
+                "message": f"Triggered vibration motor ({duration}ms)",
+                "mqtt_published": True,
+                "current_telemetry": latest_telemetry
+            }
+
+        # 6. POST /api/reset
         elif self.path.startswith('/api/reset'):
             latest_telemetry['drank_today_ml'] = 0
             latest_telemetry['bottle_ml'] = 500
