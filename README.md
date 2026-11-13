@@ -185,23 +185,29 @@ Nước nạp an toàn         LED Vàng cảnh báo sớm        LED Đỏ cả
 
 ---
 
-## 🌐 7. GIAO THỨC CLOUD IOT: MQTT & HTTP REST API
+## 🌐 7. CẤU HÌNH GIAO THỨC IOT: MQTT, HTTP REST, SSE & PHẦN CỨNG
 
-### 7.1. Cấu hình MQTT Broker
-- **Broker**: `broker.emqx.io` (Cổng TCP: 1883, Cổng WebSockets: 8084)
-- **ID Thiết Bị**: `HYDROPOD_01`
-- **Bộ nhớ đệm (Buffer Size)**: Đã mở rộng lên **512 Bytes** trên ESP32 để không bị mất gói tin JSON.
-- **Cơ chế LWT (Last Will and Testament)**: Tự động công bố trạng thái `OFFLINE` khi ESP32 mất kết nối đột ngột.
+### 7.1. Thông số Setting Giao thức MQTT (Multi-Client)
+| Tham số / Setting | ESP32 (`PubSubClient`) | Python Bridge (`paho-mqtt`) | Web Dashboard (`MQTT.js`) | Flutter Mobile (`mqtt_client`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Broker Host** | `broker.emqx.io` | `broker.emqx.io` | `broker.emqx.io` | `broker.emqx.io` |
+| **Transport & Port** | TCP **`1883`** | TCP **`1883`** | Secure WebSocket **`8084`** (`wss://.../mqtt`) | TCP **`1883`** (REST fallback trên Web) |
+| **Client ID** | `ESP32_HydraPod_<HEX>` | `HydroPod_Server_Bridge_<ts>` | `WebDashboard_<HEX>` | `FlutterPatient_<ts>` |
+| **Keep Alive / Timeout** | `15s` (default) / Retry `4000ms` | `60s` (`loop_forever()`) | `connectTimeout: 5000ms`, `reconnectPeriod: 3000ms` | `keepAlivePeriod: 30s`, `autoReconnect: true` |
+| **Buffer Size** | **`512 Bytes`** (`setBufferSize(512)`) | Không giới hạn | Không giới hạn | Không giới hạn |
+| **QoS mặc định** | `QoS 0` (`AtMostOnce`) | `QoS 0` | `QoS 0` | `QoS 0` |
+| **LWT (Last Will)** | Topic `.../status`, QoS `0`, Retain `true`, Payload `{"device_id":"HYDROPOD_01","status":"OFFLINE"}` | Theo dõi topic `.../status` | Theo dõi topic `.../status` | Tự động đồng bộ trạng thái |
+| **Online Status** | Retained `{"device_id":"HYDROPOD_01","status":"ONLINE","ip":"..."}` | Cập nhật `device_online: true` | Hiển thị pill `🟢 MQTT Online` | Hiển thị badge `MQTT Live` |
 
-### 7.2. Cấu trúc Topic MQTT
-| Tên Topic | Hướng Truyền | Chức Năng |
-| :--- | :---: | :--- |
-| `smartbottle/HYDROPOD_01/telemetry` | ESP32 $\to$ Cloud | Báo cáo toàn bộ thông số mỗi 3 giây hoặc tức thì khi uống |
-| `smartbottle/HYDROPOD_01/control` | Cloud $\to$ ESP32 | Nhận lệnh đổi phác đồ, mute chuông, test rung từ xa |
-| `smartbottle/HYDROPOD_01/ack` | ESP32 $\to$ Cloud | Phản hồi xác nhận lệnh (Feedback Loop ACK) |
-| `smartbottle/HYDROPOD_01/status` | ESP32 $\to$ Cloud | Trạng thái sống còn LWT (`ONLINE` / `OFFLINE`) |
+### 7.2. Cấu trúc Topic MQTT & Bảng Lệnh Điều Khiển
+| Tên Topic | Hướng Truyền | Retained | Chức Năng |
+| :--- | :---: | :---: | :--- |
+| `smartbottle/HYDROPOD_01/telemetry` | ESP32 $\to$ Cloud | Không | Báo cáo thông số mỗi **3 giây** hoặc tức thì khi có sự kiện uống/châm nước |
+| `smartbottle/HYDROPOD_01/control` | Cloud $\to$ ESP32 | Không | Nhận lệnh đổi phác đồ, uống/châm nước, tắt còi, test rung, đổi chuông |
+| `smartbottle/HYDROPOD_01/ack` | ESP32 $\to$ Cloud | Không | Phản hồi xác nhận thực thi lệnh tức thì (Feedback Loop ACK) |
+| `smartbottle/HYDROPOD_01/status` | ESP32 $\to$ Cloud | **Có** | Trạng thái sống còn LWT (`ONLINE` / `OFFLINE`) |
 
-#### Mẫu gói tin Telemetry JSON:
+#### Mẫu gói tin Telemetry JSON (`.../telemetry`):
 ```json
 {
   "device_id": "HYDROPOD_01",
@@ -216,7 +222,9 @@ Nước nạp an toàn         LED Vàng cảnh báo sớm        LED Đỏ cả
   "safety_status": "NORMAL",
   "alert_level": 0,
   "profile": "STANDARD",
+  "ringtone": "CHIME",
   "vibration_motor": 0,
+  "is_empty": false,
   "wifi_connected": true,
   "wifi_rssi": -48,
   "is_muted": false,
@@ -225,17 +233,39 @@ Nước nạp an toàn         LED Vàng cảnh báo sớm        LED Đỏ cả
 }
 ```
 
-### 7.3. Bảng HTTP REST API Endpoints (`server.py`)
+#### Các mẫu JSON lệnh điều khiển (`.../control`):
+- Đổi phác đồ y tế: `{"target": "profile", "mode": "HEART_FAILURE", "hard_cap": 1000}`
+- Kích hoạt bộ rung Haptic: `{"target": "vibrate", "duration_ms": 300, "pattern": "CUSTOM"}`
+- Mô phỏng uống / châm nước: `{"target": "drink", "amount": 150}` / `{"target": "refill", "amount": 350}`
+- Đổi kiểu chuông báo: `{"target": "ringtone", "tone": "MELODIC", "preview": true}`
+- Tắt/bật còi khẩn cấp: `{"target": "alarm", "action": "MUTE"}`
+- Reset dữ liệu ngày: `{"target": "reset"}`
+
+### 7.3. Giao thức HTTP REST API & Server-Sent Events (`server.py:8000`)
+Server Python (`ThreadedHTTPServer`) đóng vai trò cầu nối **HTTP $\leftrightarrow$ MQTT** và đẩy dữ liệu thời gian thực qua **SSE (Server-Sent Events)** cho Web & Mobile Emulator (bật sẵn CORS `*`):
+
 | Phương thức | Endpoint URL | Request Body Mẫu | Chức Năng |
 | :---: | :--- | :--- | :--- |
+| `GET` | `/events` | Không (`text/event-stream`) | Luồng **SSE** đẩy JSON Telemetry & ACK theo thời gian thực |
 | `GET` | `/api/telemetry` | Không | Lấy dữ liệu thời gian thực hiện tại của bình |
-| `GET` | `/api/help` | Không | Xem danh sách routes & hướng dẫn API |
+| `GET` | `/api/help` | Không | Xem danh sách routes & hướng dẫn API JSON |
 | `POST` | `/api/drink` | `{"amount_ml": 150}` | Mô phỏng nạp nước từ xa |
-| `POST` | `/api/vibrate` | `{"duration_ms": 300}` | Kích hoạt kiểm thử bộ rung xúc giác |
-| `POST` | `/api/profile` | `{"profile": "HEART_FAILURE", "hard_cap": 1000}` | Chỉ định phác đồ y tế (STANDARD, HEART_FAILURE, GOUT) |
+| `POST` | `/api/refill` | `{"amount_ml": 350}` | Châm thêm nước vào bình & cập nhật `is_empty` |
+| `POST` | `/api/vibrate` | `{"duration_ms": 300}` | Kích hoạt kiểm thử bộ rung xúc giác (GPIO 5) |
+| `POST` | `/api/profile` | `{"profile": "HEART_FAILURE", "hard_cap": 1000}` | Chỉ định phác đồ y tế (`STANDARD`, `HEART_FAILURE`, `GOUT`) |
+| `POST` | `/api/ringtone` | `{"ringtone": "MELODIC"}` | Đổi kiểu chuông (`CHIME`, `MELODIC`, `DIGITAL`, `SIREN`, `CUSTOM`) |
+| `POST` | `/api/upload_audio` | `{"filename": "alarm.mp3", "data": "data:audio/mpeg;base64,..."}` | Tải file `.mp3` cá nhân làm chuông báo |
 | `POST` | `/api/alarm` | `{"action": "MUTE"}` | Bật / Tắt chuông báo động (`MUTE` / `UNMUTE`) |
-| `POST` | `/api/reset` | `{}` | Reset bộ đếm lượng nước ngày về 0 |
+| `POST` | `/api/reset` | `{}` | Reset bộ đếm lượng nước ngày về 0 & bình về 500ml |
 | `POST` | `/api/command` | `{"command": "SIM_DEMO_SCENARIO_1"}` | Chạy nhanh các kịch bản demo kiểm thử |
+
+### 7.4. Giao thức Phần Cứng & Cầu Nối Serial (Wokwi Bridge)
+| Giao thức | Thông số Cấu hình | Thiết Bị / Vai Trò |
+| :--- | :--- | :--- |
+| **I2C (`Wire`)** | `SDA = GPIO 21`, `SCL = GPIO 22` | MPU6050 IMU (`0x68`) & Màn hình OLED SSD1306 (`0x3C`, `128x64`) |
+| **HX711 2-Wire** | `DOUT = GPIO 16`, `SCK = GPIO 17` | Load Cell 5kg (ADC 24-bit, lọc Moving Average `N=10`) |
+| **GPIO Digital / PWM** | `GPIO 4` (`tone()`), `GPIO 5` (`HIGH/LOW`) | Piezo Buzzer & Haptic Vibration Motor |
+| **UART / Wokwi TCP Bridge** | `115200 baud` $\leftrightarrow$ TCP `127.0.0.1:4000` (Retry `2.0s`) | Truyền luồng `[TELEMETRY_JSON]` trực tiếp giữa Wokwi Simulator và `server.py` |
 
 ---
 
