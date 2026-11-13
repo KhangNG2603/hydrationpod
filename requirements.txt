@@ -1,0 +1,4 @@
+# Smart Hydration Pod - Python Backend & Test Suite Requirements
+# Cài đặt: pip install -r requirements.txt
+
+paho-mqtt>=2.0.0

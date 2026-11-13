@@ -272,6 +272,16 @@ Bộ sưu tập đầy đủ các kịch bản kiểm thử HTTP REST API & MQTT
 
 ## 🚀 9. HƯỚNG DẪN CÀI ĐẶT & CHẠY MÔ PHỎNG
 
+### Bước 0: Cài đặt toàn bộ Requirements (Python, ESP32, Flutter)
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+Hoặc cài đặt thủ công từng phần:
+- **Python Backend & Test (`requirements.txt`)**: `pip install -r requirements.txt`
+- **ESP32 Firmware (`platformio.ini`)**: `~/.platformio/penv/bin/pio pkg install`
+- **Flutter Mobile App (`mobile_app/pubspec.yaml`)**: `cd mobile_app && flutter pub get`
+
 ### Bước 1: Biên dịch Firmware ESP32
 ```bash
 ~/.platformio/penv/bin/pio run
@@ -285,15 +295,15 @@ File nhị phân `firmware.bin` và `firmware.elf` sẽ được tạo tại `.p
   - Cảm biến **MPU6050** nối SDA 21, SCL 22.
   - Đèn LED cam **motor1** (Vibration Motor) nối GPIO 5.
   - Còi **bz1** nối GPIO 4.
-  - Vòng 8 LED **ring1** nối GPIO 15.
   - Màn hình OLED hiển thị `HydraPod [MQTT]` và trạng thái `Vib: ON/OFF`.
 
-### Bước 3: Khởi động Server REST API & Web Dashboard
+### Bước 3: Khởi động Server REST API, Web Dashboard & Mobile App
 ```bash
 python3 server.py
 ```
-- Mở trình duyệt Web tại: **[http://localhost:8000](http://localhost:8000)**
-- Xem tài liệu API tại: **[http://localhost:8000/api/help](http://localhost:8000/api/help)**
+- **Web Dashboard (Bác sĩ/Caregiver)**: **[http://localhost:8000](http://localhost:8000)**
+- **Patient Mobile App Emulator**: **[http://localhost:8000/mobile](http://localhost:8000/mobile)**
+- **Tài liệu API & Web Postman**: **[http://localhost:8000/docs](http://localhost:8000/docs)** / **[http://localhost:8000/api/help](http://localhost:8000/api/help)**
 
 ### Bước 4: Kiểm thử bằng Phím Tắt Serial Monitor
 Trên cửa sổ Serial Terminal của Wokwi (tốc độ 115200 baud):
