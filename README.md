@@ -102,9 +102,14 @@
 
 ---
 
-## 🧠 4. THUẬT TOÁN FSM & LOGIC XỬ LÝ CẢM BIẾN
+## 🧠 4. THUẬT TOÁN FSM & BỘ LỌC KALMAN 1D
 
-Hệ thống hoạt động theo **Máy trạng thái hữu hạn (FSM)** kết hợp bộ lọc số trung bình trượt (**Moving Average Filter N=10**) để triệt tiêu nhiễu dao động cơ học khi cầm bình:
+Hệ thống hoạt động theo **Máy trạng thái hữu hạn 5 trạng thái (`STATE_REST`, `STATE_LIFTED_IDLE`, `STATE_TILTED_DRINKING`, `STATE_SETTLING`, `STATE_IMPACT_REJECTED`)** kết hợp **Bộ lọc Kalman 1D (`kalmanWeightUpdate`)** để triệt tiêu nhiễu cơ học và phân biệt chính xác 4 sự kiện:
+
+- **Uống hợp lệ (`SENSOR_DRINK`)**: Nghiêng $> 35^\circ$, giữ $\ge 0.8\text{s}$, giảm $25\text{g} \le \Delta W \le 400\text{g}$ $\to$ cộng tổng nạp ngày, rung nhẹ 90ms + bíp xác nhận.
+- **Đổ / tràn nước (`SENSOR_SPILL`)**: Giảm $> 400\text{g}$ hoặc nghiêng dốc $> 75^\circ$ trong $< 0.8\text{s}$ $\to$ trừ dung tích bình nhưng **không** cộng vào lượng uống ngày.
+- **Châm nước (`SENSOR_REFILL`)**: Trọng lượng tăng $\ge 40\text{g}$ $\to$ cập nhật dung tích bình + rung đôi 60ms.
+- **Va chạm / Sốc (`STATE_IMPACT_REJECTED`)**: Gia tốc tổng $> 2.2G$ $\to$ khóa đánh giá, chờ ổn định 1.5s và bỏ qua nhiễu.
 
 ```
                   +--------------------------------+
@@ -158,7 +163,7 @@ Bộ rung trên chân **GPIO 5** được điều khiển qua máy trạng thái
 | :--- | :--- | :--- | :--- |
 | **Xác nhận ngụm uống** | Uống nước hợp lệ $\ge 25\text{ml}$ | **1 nhịp click êm ái (90ms)** | LED Xanh lá + Chime 1046Hz |
 | **Xác nhận châm nước** | Châm thêm nước $\ge 40\text{ml}$ | **2 nhịp nhanh (60ms ON - 60ms OFF)** | LED Cyan + Beep 800Hz |
-| **Quên uống Cấp 1** | Nhàn rỗi $\ge T_{\text{remind}}$ (30s demo / 45–60m) | Không rung | LED Cam thở nhẹ (Breathing LED) |
+| **Quên uống Cấp 1** | Nhàn rỗi $\ge T_{\text{remind}}$ (30s demo / 45–60m) | **Rung nhẹ (`VIBE_GENTLE_PULSE` 200ms / 4s)** | Không kêu còi |
 | **Quên uống Cấp 2** | Nhàn rỗi $\ge T_{\text{remind}} + 15\text{s}$ | **Rung đôi (150ms ON - 100ms OFF - 150ms ON)**, lặp mỗi 3s | LED Cam nháy + Chime ngắn 1200Hz |
 | **Quên uống Cấp 3** | Nhàn rỗi $\ge T_{\text{remind}} + 30\text{s}$ | **Rung 3 nhịp dồn dập (180ms ON - 80ms OFF $\times 3$)**, lặp mỗi 2s | LED Đỏ chớp + Chuông dồn dập 1800Hz |
 | **Khẩn cấp (Overcap)** | Vượt trần y tế ($V_{\text{nạp}} \ge V_{\text{cap}}$) | **Rung xung liên tục (250ms ON / 150ms OFF)** | LED Đỏ khẩn cấp + Còi báo động 2500Hz |
@@ -248,22 +253,29 @@ Server Python (`ThreadedHTTPServer`) đóng vai trò cầu nối **HTTP $\leftri
 | :---: | :--- | :--- | :--- |
 | `GET` | `/events` | Không (`text/event-stream`) | Luồng **SSE** đẩy JSON Telemetry & ACK theo thời gian thực |
 | `GET` | `/api/telemetry` | Không | Lấy dữ liệu thời gian thực hiện tại của bình |
+| `GET` | `/api/analytics/trend` | Không | Phân tích tốc độ nạp (`ml/h`), xu hướng & cảnh báo từ SQLite |
+| `GET` | `/api/audit_logs` | Header `X-API-Key` | Xem nhật ký truy vết bảo mật & lệnh điều khiển |
 | `GET` | `/api/help` | Không | Xem danh sách routes & hướng dẫn API JSON |
 | `POST` | `/api/drink` | `{"amount_ml": 150}` | Mô phỏng nạp nước từ xa |
 | `POST` | `/api/refill` | `{"amount_ml": 350}` | Châm thêm nước vào bình & cập nhật `is_empty` |
-| `POST` | `/api/vibrate` | `{"duration_ms": 300}` | Kích hoạt kiểm thử bộ rung xúc giác (GPIO 5) |
-| `POST` | `/api/profile` | `{"profile": "HEART_FAILURE", "hard_cap": 1000}` | Chỉ định phác đồ y tế (`STANDARD`, `HEART_FAILURE`, `GOUT`) |
-| `POST` | `/api/ringtone` | `{"ringtone": "MELODIC"}` | Đổi kiểu chuông (`CHIME`, `MELODIC`, `DIGITAL`, `SIREN`, `CUSTOM`) |
-| `POST` | `/api/upload_audio` | `{"filename": "alarm.mp3", "data": "data:audio/mpeg;base64,..."}` | Tải file `.mp3` cá nhân làm chuông báo |
+| `POST` | `/api/vibrate` | `{"duration_ms": 500, "with_buzzer": true}` | Kích hoạt tìm bình (rung + còi) hoặc test rung (GPIO 5) |
+| `POST` | `/api/profile` | `{"profile": "HEART_FAILURE", "hard_cap": 1000}` | Chỉ định phác đồ y tế (`STANDARD`, `HEART_FAILURE`, `GOUT` 2500ml) |
+| `POST` | `/api/ringtone` | `{"ringtone": "MELODIC"}` | Đổi kiểu chuông (`CHIME`, `MELODIC`, `DIGITAL`, `SIREN`) |
 | `POST` | `/api/alarm` | `{"action": "MUTE"}` | Bật / Tắt chuông báo động (`MUTE` / `UNMUTE`) |
 | `POST` | `/api/reset` | `{}` | Reset bộ đếm lượng nước ngày về 0 & bình về 500ml |
 | `POST` | `/api/command` | `{"command": "SIM_DEMO_SCENARIO_1"}` | Chạy nhanh các kịch bản demo kiểm thử |
 
-### 7.4. Giao thức Phần Cứng & Cầu Nối Serial (Wokwi Bridge)
+### 7.4. Bảo mật IoT, Broker TLS nội bộ & Lưu trữ SQLite (`security/` & `hydrationpod.db`)
+- **REST API Security**: Hỗ trợ xác thực `X-API-Key` / `Authorization: Bearer` (`HYDROPOD_API_KEY`, `HYDROPOD_REQUIRE_AUTH=1`), rate limiting (`60 req / 10s`), security headers (`X-Content-Type-Options`, `X-Frame-Options`) và ghi log kiểm toán vào bảng `security_audit_logs`.
+- **MQTT over TLS & Phân quyền Topic (`security/`)**: Broker nội bộ Mosquitto cổng `8883` (`security/mosquitto.conf`) dùng chứng chỉ TLS (`security/certs/`), ACL theo vai trò (`security/acl.conf`), và tách mạng thiết bị IoT y tế khỏi mạng văn phòng qua `security/docker-compose.iot-isolated.yml`.
+- **Lưu trữ có cấu trúc (`hydrationpod.db`)**: Bảng `telemetry_history` lưu lịch sử đo để phân tích xu hướng (`GET /api/analytics/trend`).
+- **ESP32 Hardware/Power Flags (`src/main.cpp`)**: Hỗ trợ `MQTT_USE_TLS` (`WiFiClientSecure` cổng `8883`), `ENABLE_REAL_BAT_ADC` (đọc pin thực tế `GPIO 34`) và `ENABLE_DEEP_SLEEP` (RTC wakeup 15 phút).
+
+### 7.5. Giao thức Phần Cứng & Cầu Nối Serial (Wokwi Bridge)
 | Giao thức | Thông số Cấu hình | Thiết Bị / Vai Trò |
 | :--- | :--- | :--- |
 | **I2C (`Wire`)** | `SDA = GPIO 21`, `SCL = GPIO 22` | MPU6050 IMU (`0x68`) & Màn hình OLED SSD1306 (`0x3C`, `128x64`) |
-| **HX711 2-Wire** | `DOUT = GPIO 16`, `SCK = GPIO 17` | Load Cell 5kg (ADC 24-bit, lọc Moving Average `N=10`) |
+| **HX711 2-Wire** | `DOUT = GPIO 16`, `SCK = GPIO 17` | Load Cell 5kg (ADC 24-bit, lọc Kalman 1D) |
 | **GPIO Digital / PWM** | `GPIO 4` (`tone()`), `GPIO 5` (`HIGH/LOW`) | Piezo Buzzer & Haptic Vibration Motor |
 | **UART / Wokwi TCP Bridge** | `115200 baud` $\leftrightarrow$ TCP `127.0.0.1:4000` (Retry `2.0s`) | Truyền luồng `[TELEMETRY_JSON]` trực tiếp giữa Wokwi Simulator và `server.py` |
 
@@ -331,8 +343,8 @@ File nhị phân `firmware.bin` và `firmware.elf` sẽ được tạo tại `.p
 ```bash
 python3 server.py
 ```
-- **Web Dashboard (Bác sĩ/Caregiver)**: **[http://localhost:8000](http://localhost:8000)**
-- **Patient Mobile App Emulator**: **[http://localhost:8000/mobile](http://localhost:8000/mobile)**
+- **Web Dashboard thống nhất**: **[http://localhost:8000](http://localhost:8000)** (giao diện clinical dark, bỏ phân tách trang Bác sĩ / Bệnh nhân)
+- **Flutter Mobile App (`mobile_app/`)**: 3 trang (**Trang chủ**, **Biểu đồ** `CustomPaint` + lưu `shared_preferences`, **Cài đặt** Chỉ thị y tế / Âm báo / Reset) kèm `BackgroundNotificationService` đẩy thông báo khi quên uống nước.
 - **Tài liệu API & Web Postman**: **[http://localhost:8000/docs](http://localhost:8000/docs)** / **[http://localhost:8000/api/help](http://localhost:8000/api/help)**
 
 ### Bước 4: Kiểm thử bằng Phím Tắt Serial Monitor

@@ -1,0 +1,47 @@
+# Network Segmentation: Isolate Medical IoT Devices from Office LAN
+services:
+  mqtt-tls-broker:
+    image: eclipse-mosquitto:2.0
+    container_name: hydropod-mqtt-tls
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./acl.conf:/mosquitto/config/acl.conf:ro
+      - ./certs:/mosquitto/config/certs:ro
+      - ./logs:/mosquitto/log
+    networks:
+      - iot_medical_net
+      - dmz_bridge_net
+    restart: unless-stopped
+
+  hydropod-api-bridge:
+    build: ..
+    container_name: hydropod-api-bridge
+    environment:
+      - MQTT_BROKER=mqtt-tls-broker
+      - MQTT_PORT=8883
+      - MQTT_USE_TLS=1
+      - MQTT_CA_CERT=/app/security/certs/ca.crt
+      - HYDROPOD_REQUIRE_AUTH=1
+    ports:
+      - "8000:8000"
+    networks:
+      - dmz_bridge_net
+      - office_lan_net
+    depends_on:
+      - mqtt-tls-broker
+    restart: unless-stopped
+
+networks:
+  # Isolated internal VLAN/bridge for medical IoT sensors (no direct office LAN access)
+  iot_medical_net:
+    driver: bridge
+    internal: true
+  # Controlled DMZ bridge between MQTT broker and API Gateway
+  dmz_bridge_net:
+    driver: bridge
+    internal: true
+  # Office / Doctor workstation network
+  office_lan_net:
+    driver: bridge

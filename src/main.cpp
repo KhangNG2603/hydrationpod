@@ -27,6 +27,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
@@ -50,10 +51,16 @@
 #define OLED_ADDRESS     0x3C
 
 // --- WI-FI & MQTT CLOUD CONFIGURATION ---
+#define MQTT_USE_TLS       0   // Set 1 for MQTT over TLS (port 8883)
+#define ENABLE_REAL_BAT_ADC 0  // Set 1 on physical PCB with LiPo divider on GPIO 34
+#define ENABLE_DEEP_SLEEP  0   // Set 1 on physical PCB for MPU6050/RTC Deep Sleep
+
 const char* WIFI_SSID     = "Wokwi-GUEST";
 const char* WIFI_PASS     = "";
 const char* MQTT_BROKER   = "broker.emqx.io";
-const int   MQTT_PORT     = 1883;
+const int   MQTT_PORT     = MQTT_USE_TLS ? 8883 : 1883;
+const char* MQTT_USER     = "esp32_hydropod_01";
+const char* MQTT_PASS_PWD = "";
 const char* DEVICE_ID     = "HYDROPOD_01";
 
 const char* TOPIC_TELEMETRY = "smartbottle/HYDROPOD_01/telemetry";
@@ -66,7 +73,11 @@ HX711 scale;
 Adafruit_MPU6050 mpu;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+#if MQTT_USE_TLS
+WiFiClientSecure espClient;
+#else
 WiFiClient espClient;
+#endif
 PubSubClient mqttClient(espClient);
 
 // --- PROFILE TYPES ---
@@ -143,13 +154,41 @@ SafetyStatus currentSafety = SAFETY_NORMAL;
 int currentAlertLevel = 0;
 String lastEventLog = "System Initialized";
 
-// FSM States
+// FSM States (Multi-state: Rest, Lifted Idle, Tilted Drinking, Settling, Impact Rejected)
 enum FSMState {
   STATE_REST = 0,
+  STATE_LIFTED_IDLE,
   STATE_TILTED_DRINKING,
-  STATE_SETTLING
+  STATE_SETTLING,
+  STATE_IMPACT_REJECTED
 };
 FSMState fsmState = STATE_REST;
+
+// 1D Kalman Filter state for HX711 Load Cell
+float kalman_x = 500.0;
+float kalman_p = 1.0;
+const float kalman_q = 0.08;
+const float kalman_r = 4.0;
+bool kalman_initialized = false;
+
+// Motion / Impact / Tilt telemetry for FSM disambiguation
+bool impact_detected = false;
+float max_tilt_deg = 0.0;
+unsigned long impact_start_time = 0;
+
+float kalmanWeightUpdate(float measurement) {
+  if (!kalman_initialized) {
+    kalman_x = measurement;
+    kalman_p = 1.0;
+    kalman_initialized = true;
+    return kalman_x;
+  }
+  kalman_p += kalman_q;
+  float k = kalman_p / (kalman_p + kalman_r);
+  kalman_x += k * (measurement - kalman_x);
+  kalman_p *= (1.0f - k);
+  return kalman_x;
+}
 
 // --- FUNCTION PROTOTYPES ---
 void setupWiFi();
@@ -159,6 +198,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length);
 void sendAck(const char* command, const char* status, const char* detail);
 void applyProfile(ProfileType profile, float custom_cap = 0.0);
 void readSensors();
+int readBatterySoc();
+void enterDeepSleepIfIdle(unsigned long idleSec);
 void processFSM();
 void updateSafetyStatus();
 void handleAlertOutputs();
@@ -250,9 +291,11 @@ void loop() {
 
   // 2. Read real sensors (HX711 & MPU6050)
   readSensors();
+  battery_soc_pct = readBatterySoc();
 
   // 3. Process FSM Event Engine
   processFSM();
+  enterDeepSleepIfIdle((millis() - last_intake_timestamp) / 1000);
 
   // 4. Evaluate medical safety margins
   updateSafetyStatus();
@@ -379,69 +422,106 @@ void readSensors() {
     float pitch = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / M_PI;
     float roll = atan2(-ax, az) * 180.0 / M_PI;
 
-    // Total Acceleration Vector
+    // Total Acceleration Vector & Impact Detection (> 2.2G shock)
     float total_acc = sqrt(ax * ax + ay * ay + az * az) / 9.81;
     is_moving = (fabs(total_acc - 1.0) > 0.20);
+    if (fabs(total_acc - 1.0) > 1.20) {
+      impact_detected = true;
+      impact_start_time = millis();
+    }
 
     // Tilt Detection with Hysteresis (Threshold: > 35° enters tilt, < 18° exits tilt)
-    if (fabs(pitch) > 35.0 || fabs(roll) > 35.0) {
+    float tilt_deg = max(fabs(pitch), fabs(roll));
+    if (tilt_deg > 35.0) {
       if (!is_tilted) {
         is_tilted = true;
         tilt_start_time = millis();
+        max_tilt_deg = tilt_deg;
+      } else if (tilt_deg > max_tilt_deg) {
+        max_tilt_deg = tilt_deg;
       }
     } else if (fabs(pitch) < 18.0 && fabs(roll) < 18.0) {
       is_tilted = false;
     }
   }
 
-  // B. Read HX711 Load Cell (Only when bottle is NOT tilted or violently moving)
+  // B. Read HX711 Load Cell with 1D Kalman Filter (Only when bottle is NOT tilted)
   if (!is_tilted && scale.is_ready()) {
     float raw_g = scale.get_units(1);
     if (raw_g >= 0.0 && raw_g <= 3000.0) {
-      // 10-sample Moving Average Filter
-      static float samples[10];
-      static int sample_idx = 0;
-      static bool buffer_filled = false;
-
-      samples[sample_idx] = raw_g;
-      sample_idx = (sample_idx + 1) % 10;
-      if (sample_idx == 0) buffer_filled = true;
-
-      int count = buffer_filled ? 10 : sample_idx;
-      if (count == 0) count = 1;
-
-      float sum = 0;
-      for (int i = 0; i < count; i++) sum += samples[i];
-      current_weight_g = sum / count;
+      current_weight_g = kalmanWeightUpdate(raw_g);
     }
   }
 }
 
-// --- FSM & SENSOR-DRIVEN DRINK DETECTION ---
+int readBatterySoc() {
+#if ENABLE_REAL_BAT_ADC
+  int raw = analogRead(BAT_ADC_PIN);
+  float v_bat = (raw / 4095.0f) * 3.3f * 2.0f; // 1:2 voltage divider
+  int pct = (int)(((v_bat - 3.0f) / 1.2f) * 100.0f);
+  return constrain(pct, 0, 100);
+#else
+  return battery_soc_pct;
+#endif
+}
+
+void enterDeepSleepIfIdle(unsigned long idleSec) {
+#if ENABLE_DEEP_SLEEP
+  if (idleSec >= 1800 && fsmState == STATE_REST && currentAlertLevel == 0) {
+    Serial.println(F("💤 [POWER] Entering Deep Sleep (RTC wakeup 15m)..."));
+    esp_sleep_enable_timer_wakeup(15ULL * 60ULL * 1000000ULL);
+    esp_deep_sleep_start();
+  }
+#else
+  (void)idleSec;
+#endif
+}
+
+// --- FSM & SENSOR-DRIVEN DRINK / REFILL / SPILL / IMPACT DETECTION ---
 void processFSM() {
+  if (impact_detected && fsmState != STATE_IMPACT_REJECTED) {
+    fsmState = STATE_IMPACT_REJECTED;
+    impact_start_time = millis();
+    lastEventLog = "Impact/Collision Rejected";
+    Serial.println(F("⚠️ [FSM] Impact/Shock detected! Entering STATE_IMPACT_REJECTED."));
+    sendAck("SENSOR_IMPACT", "IGNORED", lastEventLog.c_str());
+    return;
+  }
+
   switch (fsmState) {
     case STATE_REST: {
-      // Bottle sitting upright on table
       if (is_tilted) {
-        // Patient lifts and tilts the bottle to take a drink!
         weight_before_sip_g = stable_baseline_weight_g;
         tilt_start_time = millis();
+        max_tilt_deg = 35.0;
         fsmState = STATE_TILTED_DRINKING;
         Serial.printf("⚡ [FSM] Bottle Tilted! Locked pre-drink weight: %.1f g\n", weight_before_sip_g);
+      } else if (is_moving) {
+        weight_before_sip_g = stable_baseline_weight_g;
+        fsmState = STATE_LIFTED_IDLE;
+        Serial.println(F("⚡ [FSM] Bottle lifted/moved without drinking tilt."));
       } else {
-        // Continuous baseline update when stable
-        if (!is_moving && fabs(current_weight_g - stable_baseline_weight_g) < 15.0) {
+        if (fabs(current_weight_g - stable_baseline_weight_g) < 15.0) {
           stable_baseline_weight_g = current_weight_g;
         }
       }
       break;
     }
 
+    case STATE_LIFTED_IDLE: {
+      if (is_tilted) {
+        tilt_start_time = millis();
+        max_tilt_deg = 35.0;
+        fsmState = STATE_TILTED_DRINKING;
+      } else if (!is_moving) {
+        settle_start_time = millis();
+        fsmState = STATE_SETTLING;
+      }
+      break;
+    }
+
     case STATE_TILTED_DRINKING: {
-      // Patient is drinking from the tilted bottle
-      // Hold State: Weight is frozen to prevent sloshing artifacts
       if (!is_tilted) {
-        // Bottle returned to upright position
         settle_start_time = millis();
         fsmState = STATE_SETTLING;
         Serial.println(F("⚡ [FSM] Bottle Upright. Settling fluid and motion..."));
@@ -449,20 +529,41 @@ void processFSM() {
       break;
     }
 
+    case STATE_IMPACT_REJECTED: {
+      if (!is_moving && !is_tilted && (millis() - impact_start_time >= 1500)) {
+        impact_detected = false;
+        if (scale.is_ready()) {
+          stable_baseline_weight_g = kalmanWeightUpdate(scale.get_units(3));
+        }
+        max_tilt_deg = 0.0;
+        fsmState = STATE_REST;
+        Serial.println(F("✅ [FSM] Recovered from impact. Returned to STATE_REST."));
+      }
+      break;
+    }
+
     case STATE_SETTLING: {
-      // Wait at least 1.0s for water sloshing and vibrations to settle
       if (!is_tilted && !is_moving && (millis() - settle_start_time >= 1000)) {
-        float new_weight_g = scale.is_ready() ? scale.get_units(5) : current_weight_g;
+        float new_weight_g = scale.is_ready() ? kalmanWeightUpdate(scale.get_units(5)) : current_weight_g;
         if (new_weight_g < 0) new_weight_g = 0;
 
         float delta_w = weight_before_sip_g - new_weight_g;
         unsigned long sip_duration = millis() - tilt_start_time;
 
-        Serial.printf("⚡ [FSM Evaluate] Pre: %.1fg, Post: %.1fg, Delta: %.1fg, Duration: %lums\n",
-                      weight_before_sip_g, new_weight_g, delta_w, sip_duration);
+        Serial.printf("⚡ [FSM Evaluate] Pre: %.1fg, Post: %.1fg, Delta: %.1fg, MaxTilt: %.1f°, Duration: %lums\n",
+                      weight_before_sip_g, new_weight_g, delta_w, max_tilt_deg, sip_duration);
 
-        // CASE 1: Valid Drink Event (Sip >= 25ml and duration >= 800ms)
-        if (sip_duration >= 800 && delta_w >= 25.0) {
+        // CASE 1: Spill / Pour Out (Rapid massive loss > 400g or steep dump > 75° < 800ms)
+        if (delta_w > 400.0 || (max_tilt_deg > 75.0 && sip_duration < 800 && delta_w >= 25.0)) {
+          current_bottle_ml = max(0.0f, current_bottle_ml - delta_w);
+          lastEventLog = "Sensor Spill/Pour: -" + String((int)delta_w) + "ml (Not counted)";
+          Serial.printf("🟠 [SENSOR SPILL/POUR] Lost: -%d ml (Bottle Remaining: %d ml)\n",
+                        (int)delta_w, (int)current_bottle_ml);
+          sendAck("SENSOR_SPILL", "SUCCESS", lastEventLog.c_str());
+          sendTelemetryJSON();
+        }
+        // CASE 2: Valid Drink Event (25g..400g and duration >= 800ms)
+        else if (sip_duration >= 800 && delta_w >= 25.0) {
           float drank = delta_w;
           total_drank_today_ml += drank;
           hourly_intake_ml += drank;
@@ -470,17 +571,16 @@ void processFSM() {
           last_intake_timestamp = millis();
 
           lastEventLog = "Sensor Drink: +" + String((int)drank) + "ml";
-          Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml, Bottle Remaining: %d ml)\n", 
+          Serial.printf("🟢 [SENSOR DRINK DETECTED] Drank: +%d ml (Total Today: %d ml, Bottle Remaining: %d ml)\n",
                         (int)drank, (int)total_drank_today_ml, (int)current_bottle_ml);
 
-          // Audio Confirmation + Haptic Click Confirmation
           tone(BUZZER_PIN, 1046, 250);
-          triggerSingleVibe(90); // 90ms gentle tactile vibration feedback
+          triggerSingleVibe(90);
 
           sendAck("SENSOR_DRINK", "SUCCESS", lastEventLog.c_str());
           sendTelemetryJSON();
         }
-        // CASE 2: Refill Event (Water poured into bottle, weight increased by >= 40g)
+        // CASE 3: Refill Event (Water poured into bottle, weight increased by >= 40g)
         else if (delta_w <= -40.0) {
           float refilled = -delta_w;
           current_bottle_ml = min(1000.0f, current_bottle_ml + refilled);
@@ -489,16 +589,17 @@ void processFSM() {
                         (int)refilled, (int)current_bottle_ml);
 
           tone(BUZZER_PIN, 800, 150);
-          setVibrationPattern(VIBE_REFILL_CONFIRM); // 2 quick tactile pulses
+          setVibrationPattern(VIBE_REFILL_CONFIRM);
 
           sendAck("SENSOR_REFILL", "SUCCESS", lastEventLog.c_str());
           sendTelemetryJSON();
         }
-        // CASE 3: Negligible change / Accidental bump
+        // CASE 4: Negligible change / Accidental bump
         else {
           Serial.println(F("ℹ️ [FSM] Sip negligible (< 25ml) or disturbance. Ignored."));
         }
 
+        max_tilt_deg = 0.0;
         stable_baseline_weight_g = new_weight_g;
         fsmState = STATE_REST;
       }

@@ -123,34 +123,31 @@ class _WaterBottleWidgetState extends State<WaterBottleWidget>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isLow
-                            ? const Color(0xFFF43F5E).withValues(alpha: 0.15)
-                            : const Color(0xFF0EA5E9).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        isLow ? '⚠️ SẮP CẠN BÌNH' : 'CẢM BIẾN HX711 (V1)',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: isLow
-                              ? const Color(0xFFF43F5E)
-                              : const Color(0xFF38BDF8),
+                if (isLow) ...[
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Sắp cạn bình',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF43F5E),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 const Text(
                   'Lượng nước còn trong bình',
                   style: TextStyle(

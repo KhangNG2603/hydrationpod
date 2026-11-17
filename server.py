@@ -16,6 +16,9 @@ import os
 import threading
 import sys
 import base64
+import sqlite3
+import ssl
+from collections import defaultdict
 
 # Try importing paho.mqtt.client
 try:
@@ -25,15 +28,162 @@ except ImportError:
     MQTT_AVAILABLE = False
     print("⚠️ paho-mqtt not installed. MQTT bridging disabled.")
 
-PORT = 8000
-DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashboard')
+PORT = int(os.environ.get("PORT", 8000))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DIRECTORY = os.path.join(BASE_DIR, 'dashboard')
+DB_PATH = os.path.join(BASE_DIR, 'hydrationpod.db')
 
-MQTT_BROKER = "broker.emqx.io"
-MQTT_PORT = 1883
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "broker.emqx.io")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
+MQTT_USE_TLS = os.environ.get("MQTT_USE_TLS", "0") == "1"
+MQTT_CA_CERT = os.environ.get("MQTT_CA_CERT", os.path.join(BASE_DIR, "security/certs/ca.crt"))
+MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "")
+
+API_KEY = os.environ.get("HYDROPOD_API_KEY", "hydropod-dev-key-2026")
+REQUIRE_AUTH = os.environ.get("HYDROPOD_REQUIRE_AUTH", "0") == "1"
+
 TOPIC_TELEMETRY = "smartbottle/HYDROPOD_01/telemetry"
 TOPIC_CONTROL   = "smartbottle/HYDROPOD_01/control"
 TOPIC_ACK       = "smartbottle/HYDROPOD_01/ack"
 TOPIC_STATUS    = "smartbottle/HYDROPOD_01/status"
+
+db_lock = threading.Lock()
+rate_limit_buckets = defaultdict(list)
+
+def init_db():
+    with db_lock:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS telemetry_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                device_id TEXT NOT NULL,
+                drank_today_ml REAL,
+                bottle_ml REAL,
+                goal_ml REAL,
+                hard_cap_ml REAL,
+                progress_pct REAL,
+                rate_hourly_ml REAL,
+                idle_sec INTEGER,
+                battery_soc INTEGER,
+                safety_status TEXT,
+                alert_level INTEGER,
+                profile TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS security_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                actor TEXT NOT NULL,
+                method TEXT NOT NULL,
+                endpoint TEXT NOT NULL,
+                status_code INTEGER NOT NULL,
+                detail TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+def record_telemetry(t):
+    try:
+        with db_lock:
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute(
+                """INSERT INTO telemetry_history
+                   (ts, device_id, drank_today_ml, bottle_ml, goal_ml, hard_cap_ml,
+                    progress_pct, rate_hourly_ml, idle_sec, battery_soc,
+                    safety_status, alert_level, profile)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    time.time(),
+                    str(t.get("device_id", "HYDROPOD_01")),
+                    float(t.get("drank_today_ml", 0)),
+                    float(t.get("bottle_ml", 500)),
+                    float(t.get("goal_ml", 2000)),
+                    float(t.get("hard_cap_ml", 0)),
+                    float(t.get("progress_pct", 0)),
+                    float(t.get("rate_hourly_ml", 0)),
+                    int(t.get("idle_sec", 0)),
+                    int(t.get("battery_soc", 85)),
+                    str(t.get("safety_status", "NORMAL")),
+                    int(t.get("alert_level", 0)),
+                    str(t.get("profile", "STANDARD")),
+                ),
+            )
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass
+
+def record_audit(actor, method, endpoint, status_code, detail=""):
+    try:
+        with db_lock:
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute(
+                """INSERT INTO security_audit_logs (ts, actor, method, endpoint, status_code, detail)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (time.time(), str(actor), str(method), str(endpoint), int(status_code), str(detail)[:240]),
+            )
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass
+
+def analyze_hydration_trend():
+    with db_lock:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT ts, drank_today_ml, bottle_ml, goal_ml, hard_cap_ml, safety_status, idle_sec "
+            "FROM telemetry_history ORDER BY id DESC LIMIT 60"
+        ).fetchall()
+        conn.close()
+
+    if not rows:
+        return {
+            "sample_count": 0,
+            "trend": "INSUFFICIENT_DATA",
+            "rate_ml_per_hour": 0.0,
+            "warning": "Chưa đủ dữ liệu lịch sử để phân tích xu hướng",
+            "recent": [],
+        }
+
+    ordered = list(reversed([dict(r) for r in rows]))
+    first, last = ordered[0], ordered[-1]
+    dt_hours = max((last["ts"] - first["ts"]) / 3600.0, 1.0 / 60.0)
+    delta_drank = max(0.0, (last["drank_today_ml"] or 0) - (first["drank_today_ml"] or 0))
+    rate_ml_h = round(delta_drank / dt_hours, 1)
+
+    cap = last["hard_cap_ml"] or 0
+    goal = last["goal_ml"] or 2000
+    drank = last["drank_today_ml"] or 0
+
+    if cap > 0 and drank >= cap * 0.85:
+        trend = "RISK_OVERCAP"
+        warning = f"Cảnh báo xu hướng: Lượng nạp ({int(drank)}ml) đang tiệm cận/vượt trần y tế ({int(cap)}ml)"
+    elif (last["idle_sec"] or 0) >= 1800 or (rate_ml_h < 50.0 and drank < goal * 0.5):
+        trend = "DEHYDRATION_RISK"
+        warning = "Cảnh báo xu hướng: Tốc độ uống nước thấp, nguy cơ thiếu nước"
+    elif delta_drank > 0:
+        trend = "INCREASING"
+        warning = "Xu hướng uống nước ổn định và tích cực"
+    else:
+        trend = "STEADY"
+        warning = "Trạng thái nạp dịch ổn định"
+
+    return {
+        "sample_count": len(ordered),
+        "trend": trend,
+        "rate_ml_per_hour": rate_ml_h,
+        "latest_drank_ml": drank,
+        "goal_ml": goal,
+        "hard_cap_ml": cap,
+        "warning": warning,
+        "recent": ordered[-10:],
+    }
 
 # Global System Telemetry State
 latest_telemetry = {
@@ -177,6 +327,7 @@ def on_mqtt_message(client, userdata, msg):
             print(f"🔄 [MQTT Telemetry Received]: Drank={payload.get('drank_today_ml')}ml, Bottle={payload.get('bottle_ml')}ml, Safety={payload.get('safety_status')}, Vib={payload.get('vibration_motor')}")
             for k, v in payload.items():
                 latest_telemetry[k] = v
+            record_telemetry(latest_telemetry)
             broadcast_sse(latest_telemetry)
         elif msg.topic == TOPIC_ACK:
             print(f"✅ [MQTT ACK Received]: Command={payload.get('command')} -> Status={payload.get('status')}")
@@ -201,6 +352,10 @@ def start_mqtt_client():
         
     mqtt_client.on_connect = on_mqtt_connect
     mqtt_client.on_message = on_mqtt_message
+    if MQTT_USERNAME:
+        mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+    if MQTT_USE_TLS and os.path.exists(MQTT_CA_CERT):
+        mqtt_client.tls_set(ca_certs=MQTT_CA_CERT, tls_version=ssl.PROTOCOL_TLS_CLIENT)
 
     def mqtt_loop():
         try:
@@ -221,7 +376,49 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Frame-Options', 'DENY')
+
+    def _check_auth_and_rate(self, method):
+        client_ip = self.client_address[0] if self.client_address else 'unknown'
+        now = time.time()
+        bucket = [t for t in rate_limit_buckets[client_ip] if now - t < 10.0]
+        bucket.append(now)
+        rate_limit_buckets[client_ip] = bucket
+        if len(bucket) > 60:
+            record_audit(client_ip, method, self.path, 429, "Rate limit exceeded")
+            self.send_response(429)
+            self.send_header('Content-Type', 'application/json')
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "message": "Too many requests"}).encode('utf-8'))
+            return False
+
+        provided_key = self.headers.get('X-API-Key', '').strip()
+        auth_hdr = self.headers.get('Authorization', '').strip()
+        if not provided_key and auth_hdr.lower().startswith('bearer '):
+            provided_key = auth_hdr[7:].strip()
+
+        if provided_key and provided_key != API_KEY:
+            record_audit(client_ip, method, self.path, 401, "Invalid API key")
+            self.send_response(401)
+            self.send_header('Content-Type', 'application/json')
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "message": "Unauthorized: invalid API key"}).encode('utf-8'))
+            return False
+
+        if REQUIRE_AUTH and provided_key != API_KEY:
+            record_audit(client_ip, method, self.path, 401, "Missing API key")
+            self.send_response(401)
+            self.send_header('Content-Type', 'application/json')
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "message": "Unauthorized: API key required"}).encode('utf-8'))
+            return False
+
+        return True
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -338,9 +535,40 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        # 8. GET /api/analytics/trend (Structured SQLite Trend Analysis)
+        elif self.path.startswith('/api/analytics/trend'):
+            trend_data = analyze_hydration_trend()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(trend_data, indent=2).encode('utf-8'))
+            return
+
+        # 9. GET /api/audit_logs (Security & Control Audit Trail)
+        elif self.path.startswith('/api/audit_logs'):
+            if not self._check_auth_and_rate('GET'):
+                return
+            with db_lock:
+                conn = sqlite3.connect(DB_PATH)
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT id, ts, actor, method, endpoint, status_code, detail "
+                    "FROM security_audit_logs ORDER BY id DESC LIMIT 50"
+                ).fetchall()
+                conn.close()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"logs": [dict(r) for r in rows]}, indent=2).encode('utf-8'))
+            return
+
         super().do_GET()
 
     def do_POST(self):
+        if not self._check_auth_and_rate('POST'):
+            return
         content_length = int(self.headers.get('Content-Length', 0))
         body_bytes = self.rfile.read(content_length) if content_length > 0 else b'{}'
         
@@ -542,6 +770,10 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
         else:
             response_data = {"status": "error", "message": "Endpoint not found"}
 
+        record_telemetry(latest_telemetry)
+        client_ip = self.client_address[0] if self.client_address else 'unknown'
+        record_audit(client_ip, 'POST', self.path, 200, response_data.get('status', 'ok'))
+
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self._send_cors_headers()
@@ -553,6 +785,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 def run_server():
+    init_db()
     start_mqtt_client()
     
     # Start Wokwi RFC2217 background bridge

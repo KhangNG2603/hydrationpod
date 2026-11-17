@@ -4,10 +4,21 @@ import '../models/telemetry_model.dart';
 import '../services/hydropod_service.dart';
 import '../widgets/water_bottle_widget.dart';
 
-class PatientHomeScreen extends StatelessWidget {
+class PatientHomeScreen extends StatefulWidget {
   final HydropodService service;
 
   const PatientHomeScreen({super.key, required this.service});
+
+  @override
+  State<PatientHomeScreen> createState() => _PatientHomeScreenState();
+}
+
+class _PatientHomeScreenState extends State<PatientHomeScreen> {
+  int _currentIndex = 0;
+  String? _draftProfile;
+  double? _draftHardCap;
+
+  HydropodService get service => widget.service;
 
   @override
   Widget build(BuildContext context) {
@@ -19,9 +30,9 @@ class PatientHomeScreen extends StatelessWidget {
             (t.hardCapMl > 0 && t.drankTodayMl >= t.hardCapMl);
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0B0F17),
+          backgroundColor: const Color(0xFF0B0D14),
           appBar: AppBar(
-            backgroundColor: const Color(0xFF111927),
+            backgroundColor: const Color(0xFF11141C),
             elevation: 0,
             titleSpacing: 16,
             title: Row(
@@ -70,7 +81,7 @@ class PatientHomeScreen extends StatelessWidget {
             actions: [
               // Connection Status Chip
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.only(top: 12, bottom: 12, right: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: (service.isServerConnected || service.isMqttConnected)
@@ -105,51 +116,76 @@ class PatientHomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.tune_rounded, color: Color(0xFF94A3B8)),
-                tooltip: 'Cấu hình kết nối Server',
-                onPressed: () => _showServerDialog(context),
-              ),
             ],
           ),
-          body: RefreshIndicator(
-            onRefresh: service.fetchTelemetryRest,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // 1. Contextual Medical / Reminder Alert Banner
-                if (isOvercap)
-                  _buildEmergencyBanner(t)
-                else if (t.isEmpty)
-                  _buildEmptyBottleBanner()
-                else if (t.alertLevel >= 1)
-                  _buildIdleReminderBanner(t),
-
-                // 2. Hero Daily Hydration Progress Card
-                _buildHydrationRingCard(t, isOvercap),
-                const SizedBox(height: 14),
-
-                // 3. Hardware Status Strip (Idle timer, Battery, Haptic Motor)
-                _buildHardwareMetricsRow(t),
-                const SizedBox(height: 14),
-
-                // 4. Visual Water Bottle Level (HX711 Load Cell)
-                WaterBottleWidget(
-                  bottleMl: t.bottleMl,
-                  isEmpty: t.isEmpty,
-                  onQuickRefill: () => service.refillBottle(350),
+          body: IndexedStack(
+            index: _currentIndex,
+            children: [
+              // PAGE 0: HOME
+              RefreshIndicator(
+                onRefresh: service.fetchTelemetryRest,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (isOvercap)
+                      _buildEmergencyBanner(t)
+                    else if (t.isEmpty)
+                      _buildEmptyBottleBanner()
+                    else if (t.alertLevel >= 1)
+                      _buildIdleReminderBanner(t),
+                    _buildHydrationRingCard(t, isOvercap),
+                    const SizedBox(height: 14),
+                    _buildHardwareMetricsRow(t),
+                    const SizedBox(height: 14),
+                    WaterBottleWidget(
+                      bottleMl: t.bottleMl,
+                      isEmpty: t.isEmpty,
+                      onQuickRefill: () => service.refillBottle(350),
+                    ),
+                    const SizedBox(height: 14),
+                    _buildQuickActionsCard(t, isOvercap),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                const SizedBox(height: 14),
+              ),
 
-                // 5. Patient Quick Action Buttons
-                _buildQuickActionsCard(t, isOvercap),
-                const SizedBox(height: 14),
+              // PAGE 1: HISTORY CHART & TREND
+              ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildTrendCard(t),
+                  const SizedBox(height: 14),
+                  _buildHistoryTimelineCard(),
+                  const SizedBox(height: 24),
+                ],
+              ),
 
-                // 6. Personal Ringtone Selector
-                _buildRingtoneCard(t),
-                const SizedBox(height: 24),
-              ],
-            ),
+              // PAGE 2: SETTINGS (Medical Directive + Ringtone + Reset)
+              _buildSettingsPage(t),
+            ],
+          ),
+          bottomNavigationBar: NavigationBar(
+            backgroundColor: const Color(0xFF11141C),
+            indicatorColor: const Color(0xFF0EA5E9).withValues(alpha: 0.18),
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded, color: Color(0xFF38BDF8)),
+                label: 'Trang chủ',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.show_chart_rounded),
+                selectedIcon: Icon(Icons.show_chart_rounded, color: Color(0xFF38BDF8)),
+                label: 'Biểu đồ',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings_rounded, color: Color(0xFF38BDF8)),
+                label: 'Cài đặt',
+              ),
+            ],
           ),
         );
       },
@@ -595,7 +631,7 @@ class PatientHomeScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.vibration_rounded, size: 17),
                   label: const Text(
-                    'Tìm bình (Rung + Còi)',
+                    'Tìm bình',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -603,19 +639,33 @@ class PatientHomeScreen extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: service.acknowledgeAlarm,
+                  onPressed: service.toggleMute,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFF87171),
-                    side: const BorderSide(color: Color(0xFF7F1D1D)),
+                    foregroundColor: t.isMuted
+                        ? const Color(0xFF4CC38A)
+                        : const Color(0xFFF87171),
+                    side: BorderSide(
+                      color: t.isMuted
+                          ? const Color(0xFF14532D)
+                          : const Color(0xFF7F1D1D),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 11),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon: const Icon(Icons.notifications_off_outlined, size: 17),
-                  label: const Text(
-                    'Tắt còi nhắc',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  icon: Icon(
+                    t.isMuted
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                    size: 17,
+                  ),
+                  label: Text(
+                    t.isMuted ? 'Bật lại còi' : 'Tắt còi nhắc',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -685,149 +735,385 @@ class PatientHomeScreen extends StatelessWidget {
     );
   }
 
-  void _showServerDialog(BuildContext context) {
-    final controller = TextEditingController(text: service.apiBaseUrl);
-    String selectedProfile = service.telemetry.profile.toUpperCase();
-    if (!['STANDARD', 'HEART_FAILURE', 'GOUT'].contains(selectedProfile)) {
-      selectedProfile = 'STANDARD';
-    }
-    double hardCap = service.telemetry.hardCapMl > 0
-        ? service.telemetry.hardCapMl.clamp(600, 2000).toDouble()
-        : 1000.0;
+  Widget _buildTrendCard(TelemetryModel t) {
+    final pts = service.history;
+    final values = pts.isEmpty
+        ? <double>[0.0, t.drankTodayMl]
+        : (pts.length == 1
+            ? <double>[0.0, pts.first.drankMl]
+            : pts.map((p) => p.drankMl).toList());
+    final maxVal = values.fold<double>(
+      t.goalMl > 0 ? t.goalMl : 2000.0,
+      (a, b) => a > b ? a : b,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11141C),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF1E2430)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Biểu đồ lũy kế nạp dịch',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFA3A9B8),
+                ),
+              ),
+              Text(
+                '${service.ratePerHourMl.toInt()} ml/h',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF38BDF8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            service.trendSummary,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFFEEF0F5),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 180,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _HydrationChartPainter(
+                values: values,
+                maxY: maxVal,
+                goalY: t.goalMl > 0 ? t.goalMl : 2000.0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryTimelineCard() {
+    final pts = service.history.reversed.toList();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF11141C),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF1E2430)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Lịch sử ghi nhận gần đây',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFA3A9B8),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (pts.isEmpty)
+            const Text(
+              'Chưa có dữ liệu mới trong phiên này',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF7A8296)),
+            )
+          else
+            ...pts.take(12).map((p) {
+              final hh = p.time.hour.toString().padLeft(2, '0');
+              final mm = p.time.minute.toString().padLeft(2, '0');
+              final ss = p.time.second.toString().padLeft(2, '0');
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$hh:$mm:$ss',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF7A8296),
+                      ),
+                    ),
+                    Text(
+                      '${p.drankMl.toInt()} ml',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFEEF0F5),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsPage(TelemetryModel t) {
+    final currentProfile = _draftProfile ??
+        (['STANDARD', 'HEART_FAILURE', 'GOUT'].contains(t.profile.toUpperCase())
+            ? t.profile.toUpperCase()
+            : 'STANDARD');
+    final currentCap = _draftHardCap ??
+        (t.hardCapMl > 0 ? t.hardCapMl.clamp(600, 2000).toDouble() : 1000.0);
 
     final profiles = [
       {'id': 'STANDARD', 'label': 'Tiêu chuẩn (2000 ml)'},
       {'id': 'HEART_FAILURE', 'label': 'Suy tim / Thận (Giới hạn trần)'},
-      {'id': 'GOUT', 'label': 'Sỏi thận / Gout (3000 ml)'},
+      {'id': 'GOUT', 'label': 'Sỏi thận / Gout (2500 ml)'},
     ];
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF11141C),
-          title: const Text(
-            'Cài đặt hệ thống & Chỉ thị y tế',
-            style: TextStyle(color: Colors.white, fontSize: 16),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF11141C),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E2430)),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'REST API URL (VD: http://10.0.2.2:8000)',
-                    labelStyle: TextStyle(color: Color(0xFFA3A9B8)),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFF282E3D)),
-                    ),
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Điều chỉnh chỉ thị y tế',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFA3A9B8),
                 ),
-                const SizedBox(height: 16),
-                const Divider(color: Color(0xFF1E2430)),
-                const SizedBox(height: 8),
-                const Text(
-                  'Điều chỉnh chỉ thị y tế',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFA3A9B8),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ...profiles.map((item) {
-                  final isSelected = selectedProfile == item['id'];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: InkWell(
-                      onTap: () {
-                        setDialogState(() {
-                          selectedProfile = item['id']!;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
+              ),
+              const SizedBox(height: 10),
+              ...profiles.map((item) {
+                final isSelected = currentProfile == item['id'];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _draftProfile = item['id'];
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 11,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF0EA5E9).withValues(alpha: 0.16)
+                            : const Color(0xFF0B0D14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
                           color: isSelected
-                              ? const Color(0xFF0EA5E9).withValues(alpha: 0.18)
-                              : const Color(0xFF0B0F17),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF38BDF8)
-                                : const Color(0xFF1E293B),
-                          ),
+                              ? const Color(0xFF38BDF8)
+                              : const Color(0xFF1E2430),
                         ),
-                        child: Text(
-                          item['label']!,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: isSelected
-                                ? const Color(0xFF38BDF8)
-                                : const Color(0xFF94A3B8),
-                          ),
+                      ),
+                      child: Text(
+                        item['label']!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? const Color(0xFF38BDF8)
+                              : const Color(0xFFA3A9B8),
                         ),
                       ),
                     ),
-                  );
-                }),
-                if (selectedProfile == 'HEART_FAILURE') ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Trần cứng tối đa: ${hardCap.toInt()} ml/ngày',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFF87171),
-                    ),
                   ),
-                  Slider(
-                    value: hardCap,
-                    min: 600,
-                    max: 2000,
-                    divisions: 28,
-                    activeColor: const Color(0xFFEF4444),
-                    onChanged: (val) {
-                      setDialogState(() {
-                        hardCap = val;
-                      });
-                    },
+                );
+              }),
+              if (currentProfile == 'HEART_FAILURE') ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Trần cứng tối đa: ${currentCap.toInt()} ml/ngày',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFF87171),
                   ),
-                ],
+                ),
+                Slider(
+                  value: currentCap,
+                  min: 600,
+                  max: 2000,
+                  divisions: 28,
+                  activeColor: const Color(0xFFE5484D),
+                  onChanged: (val) => setState(() => _draftHardCap = val),
+                ),
               ],
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await service.setProfile(
+                      currentProfile,
+                      hardCap: currentProfile == 'HEART_FAILURE'
+                          ? currentCap.toInt()
+                          : 0,
+                    );
+                    if (mounted) {
+                      setState(() {
+                        _draftProfile = null;
+                        _draftHardCap = null;
+                      });
+                    }
+                  },
+                  child: const Text('Áp dụng chỉ thị y tế'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildRingtoneCard(t),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF11141C),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E2430)),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: service.resetDay,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFF87171),
+                side: const BorderSide(color: Color(0xFF7F1D1D)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text(
+                'Đặt lại dữ liệu ngày (Reset)',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Hủy'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                service.updateApiBaseUrl(controller.text);
-                await service.setProfile(
-                  selectedProfile,
-                  hardCap: selectedProfile == 'HEART_FAILURE'
-                      ? hardCap.toInt()
-                      : 0,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('Lưu & Áp dụng'),
-            ),
-          ],
         ),
-      ),
+        const SizedBox(height: 24),
+      ],
     );
+  }
+}
+
+class _HydrationChartPainter extends CustomPainter {
+  final List<double> values;
+  final double maxY;
+  final double goalY;
+
+  const _HydrationChartPainter({
+    required this.values,
+    required this.maxY,
+    required this.goalY,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const leftPad = 42.0;
+    const rightPad = 8.0;
+    const topPad = 10.0;
+    const bottomPad = 14.0;
+
+    final chartW = (size.width - leftPad - rightPad).clamp(10.0, size.width);
+    final chartH = (size.height - topPad - bottomPad).clamp(10.0, size.height);
+    final safeMax = maxY > 0 ? maxY : 2000.0;
+
+    final gridPaint = Paint()
+      ..color = const Color(0xFF1E2430)
+      ..strokeWidth = 1;
+
+    const labelStyle = TextStyle(
+      color: Color(0xFF7A8296),
+      fontSize: 10,
+      fontWeight: FontWeight.w500,
+    );
+
+    // Draw 3 horizontal grid lines (0%, 50%, 100%)
+    for (final frac in [0.0, 0.5, 1.0]) {
+      final y = topPad + chartH * (1.0 - frac);
+      canvas.drawLine(
+        Offset(leftPad, y),
+        Offset(leftPad + chartW, y),
+        gridPaint,
+      );
+      final valTxt = '${(safeMax * frac).toInt()}';
+      final tp = TextPainter(
+        text: TextSpan(text: valTxt, style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(leftPad - tp.width - 6, y - tp.height / 2));
+    }
+
+    // Draw line + area fill
+    final points = <Offset>[];
+    final count = values.length;
+    for (int i = 0; i < count; i++) {
+      final x = count == 1
+          ? leftPad + chartW
+          : leftPad + (chartW * i / (count - 1));
+      final norm = (values[i] / safeMax).clamp(0.0, 1.0);
+      final y = topPad + chartH * (1.0 - norm);
+      points.add(Offset(x, y));
+    }
+
+    if (points.length >= 2) {
+      final linePath = Path()..moveTo(points.first.dx, points.first.dy);
+      for (int i = 1; i < points.length; i++) {
+        linePath.lineTo(points[i].dx, points[i].dy);
+      }
+
+      final fillPath = Path.from(linePath)
+        ..lineTo(points.last.dx, topPad + chartH)
+        ..lineTo(points.first.dx, topPad + chartH)
+        ..close();
+
+      final fillPaint = Paint()
+        ..color = const Color(0xFF0EA5E9).withValues(alpha: 0.14)
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(fillPath, fillPaint);
+
+      final linePaint = Paint()
+        ..color = const Color(0xFF38BDF8)
+        ..strokeWidth = 2.2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      canvas.drawPath(linePath, linePaint);
+    }
+
+    final dotPaint = Paint()..color = const Color(0xFF38BDF8);
+    for (final pt in points) {
+      canvas.drawCircle(pt, 3.2, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HydrationChartPainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.maxY != maxY ||
+        oldDelegate.goalY != goalY;
   }
 }
 

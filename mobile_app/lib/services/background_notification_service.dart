@@ -10,9 +10,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 import '../models/telemetry_model.dart';
 
 class BackgroundNotificationService {
-  static const String _fgChannelId = 'hydropod_fg';
   static const String _alertChannelId = 'hydropod_alerts';
-  static const int _fgNotificationId = 888;
   static const String _mqttBroker = 'broker.emqx.io';
   static const int _mqttPort = 1883;
   static const String _topicTelemetry = 'smartbottle/HYDROPOD_01/telemetry';
@@ -36,17 +34,9 @@ class BackgroundNotificationService {
       await androidPlugin.requestNotificationsPermission();
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
-          _fgChannelId,
-          'Theo dõi bình nước chạy ngầm',
-          description: 'Giữ kết nối MQTT theo dõi bình nước trong nền',
-          importance: Importance.low,
-        ),
-      );
-      await androidPlugin.createNotificationChannel(
-        const AndroidNotificationChannel(
           _alertChannelId,
-          'Cảnh báo & Nhắc uống nước',
-          description: 'Thông báo nhắc uống nước, hết nước và cảnh báo y tế',
+          'Nhắc nhở uống nước',
+          description: 'Thông báo khi quên uống nước',
           importance: Importance.high,
           playSound: true,
           enableVibration: true,
@@ -59,12 +49,7 @@ class BackgroundNotificationService {
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStart: true,
-        isForegroundMode: true,
-        notificationChannelId: _fgChannelId,
-        initialNotificationTitle: 'Smart Hydration Pod',
-        initialNotificationContent: 'Đang theo dõi bình nước qua MQTT...',
-        foregroundServiceNotificationId: _fgNotificationId,
-        foregroundServiceTypes: [AndroidForegroundType.dataSync],
+        isForegroundMode: false,
       ),
       iosConfiguration: IosConfiguration(autoStart: false),
     );
@@ -80,26 +65,20 @@ class BackgroundNotificationService {
       settings: const InitializationSettings(android: androidInit),
     );
 
-    String lastSafety = 'NORMAL';
     int lastAlertLevel = 0;
-    bool wasEmpty = false;
     DateTime? lastAlertTime;
 
-    Future<void> showAlert({
-      required int id,
-      required String title,
-      required String body,
-    }) async {
+    Future<void> showReminderAlert(TelemetryModel t) async {
       await _notifications.show(
-        id: id,
-        title: title,
-        body: body,
+        id: 104,
+        title: 'Nhắc nhở uống nước (Cấp ${t.alertLevel})',
+        body:
+            'Bạn chưa uống nước trong ${t.idleSec}s. Tiến độ hôm nay: ${t.drankTodayMl.toInt()}/${t.goalMl.toInt()} ml.',
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             _alertChannelId,
-            'Cảnh báo & Nhắc uống nước',
-            channelDescription:
-                'Thông báo nhắc uống nước, hết nước và cảnh báo y tế',
+            'Nhắc nhở uống nước',
+            channelDescription: 'Thông báo khi quên uống nước',
             importance: Importance.high,
             priority: Priority.high,
             playSound: true,
@@ -110,71 +89,17 @@ class BackgroundNotificationService {
     }
 
     void handleTelemetry(TelemetryModel t) {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: 'Smart Hydration Pod • ${t.drankTodayMl}/${t.goalMl} ml',
-          content:
-              'Trong bình: ${t.bottleMl} ml • Pin: ${t.batterySoc}% • ${t.profile}',
-        );
-      }
-
       final now = DateTime.now();
       final cooldownPassed =
           lastAlertTime == null ||
           now.difference(lastAlertTime!).inSeconds >= 60;
 
-      // 1. Medical safety margin alerts
-      if (t.safetyStatus != lastSafety ||
-          (t.safetyStatus != 'NORMAL' && cooldownPassed)) {
-        if (t.safetyStatus == 'EMERGENCY_OVERCAP') {
-          showAlert(
-            id: 101,
-            title: '🚨 KHẨN CẤP: Vượt trần nạp dịch!',
-            body:
-                'Đã uống ${t.drankTodayMl}/${t.hardCapMl} ml. Ngừng uống ngay và kiểm tra bệnh nhân!',
-          );
-          lastAlertTime = now;
-        } else if (t.safetyStatus == 'DANGER_RED') {
-          showAlert(
-            id: 102,
-            title: '🔴 Cảnh báo nguy hiểm (≥ 90% trần)',
-            body:
-                'Đã nạp ${t.drankTodayMl}/${t.hardCapMl} ml. Cần hạn chế uống thêm.',
-          );
-          lastAlertTime = now;
-        } else if (t.safetyStatus == 'APPROACH_YELLOW') {
-          showAlert(
-            id: 103,
-            title: '🟡 Tiệm cận hạn mức (≥ 80% trần)',
-            body: 'Đã nạp ${t.drankTodayMl}/${t.hardCapMl} ml. Hãy uống chậm lại.',
-          );
-          lastAlertTime = now;
-        }
-      }
-      lastSafety = t.safetyStatus;
-
-      // 2. Idle hydration reminder alerts
       if (t.alertLevel >= 1 &&
           (t.alertLevel != lastAlertLevel || cooldownPassed)) {
-        showAlert(
-          id: 104,
-          title: '💧 Nhắc nhở uống nước (Cấp ${t.alertLevel})',
-          body:
-              'Bạn chưa uống nước trong ${t.idleSec}s. Tiến độ hôm nay: ${t.drankTodayMl}/${t.goalMl} ml.',
-        );
+        showReminderAlert(t);
         lastAlertTime = now;
       }
       lastAlertLevel = t.alertLevel;
-
-      // 3. Empty bottle alert
-      if (t.isEmpty && !wasEmpty) {
-        showAlert(
-          id: 105,
-          title: '🚰 Bình nước sắp cạn (${t.bottleMl} ml)',
-          body: 'Hãy châm thêm nước vào bình để tiếp tục theo dõi.',
-        );
-      }
-      wasEmpty = t.isEmpty;
     }
 
     final client = MqttServerClient(
