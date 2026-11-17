@@ -1,9 +1,12 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'screens/patient_home_screen.dart';
+import 'services/background_notification_service.dart';
 import 'services/hydropod_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await BackgroundNotificationService.initialize();
   runApp(const HydropodPatientApp());
 }
 
@@ -38,12 +41,12 @@ class _HydropodPatientAppState extends State<HydropodPatientApp> {
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0F17),
+        scaffoldBackgroundColor: const Color(0xFF0B0D14),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF0EA5E9),
           secondary: Color(0xFF38BDF8),
-          surface: Color(0xFF111927),
-          error: Color(0xFFEF4444),
+          surface: Color(0xFF11141C),
+          error: Color(0xFFE5484D),
         ),
       ),
       home: PatientHomeScreen(service: _service),

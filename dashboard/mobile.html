@@ -707,9 +707,12 @@
           <div class="app-subtitle">Trợ lý nhắc uống nước cá nhân</div>
         </div>
       </div>
-      <div class="conn-pill" id="conn-pill">
-        <span class="conn-dot"></span>
-        <span id="conn-txt">MQTT Live</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="conn-pill" id="conn-pill">
+          <span class="conn-dot"></span>
+          <span id="conn-txt">MQTT Live</span>
+        </div>
+        <button onclick="openSettingsModal()" title="Cài đặt chỉ thị y tế" style="background:rgba(148,163,184,0.12);border:1px solid #334155;color:#cbd5e1;border-radius:10px;padding:5px 8px;cursor:pointer;font-size:13px;">⚙️</button>
       </div>
     </div>
 
@@ -810,7 +813,7 @@
             🚰 Châm +350ml
           </button>
           <button class="m-btn m-btn-vibe" onclick="testVibration()">
-            📳 Tìm bình (Rung)
+            📳 Tìm bình (Rung + Còi)
           </button>
           <button class="m-btn m-btn-mute" onclick="ackEmergency()">
             🔕 Tắt còi nhắc
@@ -829,14 +832,26 @@
           <button class="tone-chip" id="chip-MELODIC" onclick="selectTone('MELODIC')">🎵 Giai Điệu</button>
           <button class="tone-chip" id="chip-DIGITAL" onclick="selectTone('DIGITAL')">📟 Bíp Y Tế</button>
           <button class="tone-chip" id="chip-SIREN" onclick="selectTone('SIREN')">🚨 Còi Khẩn</button>
-          <button class="tone-chip" id="chip-CUSTOM" onclick="selectTone('CUSTOM')">🎧 Nhạc MP3</button>
         </div>
-        <div class="mp3-upload-bar">
-          <span id="mp3-status" style="font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            Tải file .mp3 cá nhân làm chuông báo
-          </span>
-          <label for="mp3-input" class="btn-mp3-mini">📂 Chọn .MP3</label>
-          <input type="file" id="mp3-input" accept=".mp3,audio/mpeg" style="display:none" onchange="uploadMp3(event)" />
+      </div>
+    </div>
+
+    <!-- Settings Modal (Medical Directive inside Settings) -->
+    <div id="settings-modal" style="display:none;position:absolute;inset:0;background:rgba(2,6,23,0.78);z-index:50;align-items:center;justify-content:center;padding:18px;">
+      <div style="background:#111927;border:1px solid #1e293b;border-radius:18px;padding:16px;width:100%;max-width:330px;color:#f8fafc;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:10px;">⚙️ Cài đặt Chỉ thị Y tế</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+          <button class="tone-chip" id="prof-STANDARD" onclick="pickModalProfile('STANDARD')" style="text-align:left;padding:9px 12px;">🩺 Tiêu Chuẩn (2000 ml)</button>
+          <button class="tone-chip" id="prof-HEART_FAILURE" onclick="pickModalProfile('HEART_FAILURE')" style="text-align:left;padding:9px 12px;">❤️ Suy Tim / Thận (Giới hạn trần)</button>
+          <button class="tone-chip" id="prof-GOUT" onclick="pickModalProfile('GOUT')" style="text-align:left;padding:9px 12px;">💧 Sỏi Thận / Gout (3000 ml)</button>
+        </div>
+        <div id="modal-cap-wrap" style="display:none;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px;">Trần cứng: <span id="modal-cap-val">1000</span> ml/ngày</div>
+          <input type="range" id="modal-cap-slider" min="600" max="2000" step="50" value="1000" oninput="document.getElementById('modal-cap-val').innerText=this.value" style="width:100%;" />
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button onclick="closeSettingsModal()" style="background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:10px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;">Hủy</button>
+          <button onclick="saveMobileProfile()" style="background:#0ea5e9;border:none;color:#fff;border-radius:10px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700;">Lưu &amp; Áp dụng</button>
         </div>
       </div>
     </div>
@@ -1006,13 +1021,10 @@
         : `Đủ cho khoảng ${Math.ceil(state.bottle / 150)} lần uống (150ml/lần)`;
 
       // Ringtone chips
-      ['CHIME', 'MELODIC', 'DIGITAL', 'SIREN', 'CUSTOM'].forEach(t => {
+      ['CHIME', 'MELODIC', 'DIGITAL', 'SIREN'].forEach(t => {
         const el = document.getElementById('chip-' + t);
         if (el) el.classList.toggle('active', state.ringtone === t);
       });
-      if (state.custom_mp3_name) {
-        document.getElementById('mp3-status').innerText = '🎵 Đang dùng: ' + state.custom_mp3_name;
-      }
     }
 
     async function drinkWater(amt) {
@@ -1036,7 +1048,7 @@
       await fetch('/api/vibrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ duration_ms: 300 })
+        body: JSON.stringify({ duration_ms: 500, pattern: 'FIND', with_buzzer: true })
       });
     }
 
@@ -1052,17 +1064,52 @@
     async function selectTone(tone) {
       state.ringtone = tone;
       localStorage.setItem('hydropod_ringtone', tone);
-      playTone(tone);
       renderUI();
       await fetch('/api/ringtone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ringtone: tone })
+        body: JSON.stringify({ ringtone: tone, preview: true })
       });
     }
 
-    function previewTone() {
-      playTone(state.ringtone);
+    async function previewTone() {
+      await fetch('/api/ringtone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ringtone: state.ringtone, preview: true })
+      });
+    }
+
+    let modalProfile = 'STANDARD';
+    function openSettingsModal() {
+      modalProfile = state.profile || 'STANDARD';
+      const cap = state.cap > 0 ? Math.min(2000, Math.max(600, Math.round(state.cap))) : 1000;
+      document.getElementById('modal-cap-slider').value = cap;
+      document.getElementById('modal-cap-val').innerText = cap;
+      pickModalProfile(modalProfile);
+      document.getElementById('settings-modal').style.display = 'flex';
+    }
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').style.display = 'none';
+    }
+    function pickModalProfile(p) {
+      modalProfile = p;
+      ['STANDARD', 'HEART_FAILURE', 'GOUT'].forEach(id => {
+        const el = document.getElementById('prof-' + id);
+        if (el) el.classList.toggle('active', id === p);
+      });
+      document.getElementById('modal-cap-wrap').style.display = p === 'HEART_FAILURE' ? 'block' : 'none';
+    }
+    async function saveMobileProfile() {
+      const hardCap = modalProfile === 'HEART_FAILURE'
+        ? parseInt(document.getElementById('modal-cap-slider').value, 10)
+        : 0;
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: modalProfile, hard_cap: hardCap })
+      });
+      closeSettingsModal();
     }
 
     function uploadMp3(e) {

@@ -152,14 +152,27 @@ class HydropodService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Patient tests haptic vibration on the bottle (GPIO 5)
-  Future<void> testVibration([int durationMs = 300]) async {
-    _publishMqttJson({'target': 'vibrate', 'duration': durationMs});
+  /// Patient triggers Find Pod (vibration + buzzer) or haptic test on the bottle
+  Future<void> testVibration([
+    int durationMs = 500,
+    bool withBuzzer = true,
+  ]) async {
+    final pattern = withBuzzer ? 'FIND' : 'CUSTOM';
+    _publishMqttJson({
+      'target': 'vibrate',
+      'duration_ms': durationMs,
+      'pattern': pattern,
+      'with_buzzer': withBuzzer,
+    });
     try {
       await http.post(
         Uri.parse('$_apiBaseUrl/api/vibrate'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'duration_ms': durationMs}),
+        body: jsonEncode({
+          'duration_ms': durationMs,
+          'pattern': pattern,
+          'with_buzzer': withBuzzer,
+        }),
       );
       await fetchTelemetryRest();
     } catch (_) {}
@@ -173,6 +186,23 @@ class HydropodService extends ChangeNotifier {
         Uri.parse('$_apiBaseUrl/api/ringtone'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'ringtone': tone}),
+      );
+      await fetchTelemetryRest();
+    } catch (_) {}
+  }
+
+  /// Update medical profile & hard cap from mobile Settings
+  Future<void> setProfile(String profile, {int hardCap = 0}) async {
+    _publishMqttJson({
+      'target': 'profile',
+      'mode': profile,
+      'hard_cap': hardCap,
+    });
+    try {
+      await http.post(
+        Uri.parse('$_apiBaseUrl/api/profile'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'profile': profile, 'hard_cap': hardCap}),
       );
       await fetchTelemetryRest();
     } catch (_) {}

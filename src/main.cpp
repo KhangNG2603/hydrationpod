@@ -93,6 +93,7 @@ enum VibrationPattern {
   VIBE_NONE = 0,
   VIBE_CLICK_CONFIRM,      // 1 single short pulse 80ms (xác nhận uống nước thành công)
   VIBE_REFILL_CONFIRM,     // 2 quick clicks 60ms (xác nhận châm nước)
+  VIBE_GENTLE_PULSE,       // 1 gentle pulse: 200ms ON, nghỉ 3.8s (Nhắc nhở Cấp 1 - chỉ rung, không còi)
   VIBE_DOUBLE_PULSE,       // 2 pulses: 150ms ON, 100ms OFF, 150ms ON, nghỉ 2.5s (Nhắc nhở Cấp 2)
   VIBE_TRIPLE_URGENT,      // 3 rapid pulses: 180ms ON, 80ms OFF x3, nghỉ 1.3s (Nhắc nhở Cấp 3)
   VIBE_EMERGENCY_ALARM,    // Continuous rapid pulsing: 250ms ON, 150ms OFF (Vượt trần y tế)
@@ -627,6 +628,19 @@ void updateVibration() {
       }
       break;
 
+    case VIBE_GENTLE_PULSE: {
+      // Repeat cycle: 200ms ON, 3800ms OFF (Total 4000ms cycle - Level 1 silent reminder)
+      unsigned long cycleTime = elapsed % 4000;
+      if (cycleTime < 200) {
+        digitalWrite(MOTOR_PIN, HIGH);
+        is_vibrating = true;
+      } else {
+        digitalWrite(MOTOR_PIN, LOW);
+        is_vibrating = false;
+      }
+      break;
+    }
+
     case VIBE_DOUBLE_PULSE: {
       // Repeat cycle: 150ms ON, 100ms OFF, 150ms ON, 2600ms OFF (Total 3000ms cycle)
       unsigned long cycleTime = elapsed % 3000;
@@ -763,10 +777,8 @@ void handleAlertOutputs() {
 
   // Idle Alert Levels (Quên uống nước)
   if (currentAlertLevel == 1) {
-    // Level 1: Gentle OLED notification, motor & buzzer quiet
-    if (currentVibePattern != VIBE_CUSTOM_ONCE && currentVibePattern != VIBE_CLICK_CONFIRM) {
-      setVibrationPattern(VIBE_NONE);
-    }
+    // Level 1: Gentle Vibration only (no buzzer)
+    setVibrationPattern(VIBE_GENTLE_PULSE);
   } else if (currentAlertLevel == 2) {
     // Level 2: Double Pulse Vibration + Periodic Chime
     setVibrationPattern(VIBE_DOUBLE_PULSE);
@@ -953,13 +965,23 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       sendAck("ALARM_CONTROL", "SUCCESS", "Alarm Unmuted");
     }
   }
-  // 3. Vibration Motor Remote Command (Test / Haptic Trigger)
+  // 3. Vibration Motor & Find Pod Remote Command (Test / Haptic + Buzzer)
   else if (doc["target"].is<const char*>() && (String(doc["target"].as<const char*>()).equalsIgnoreCase("vibrate") || 
-                                               String(doc["target"].as<const char*>()).equalsIgnoreCase("vibration"))) {
+                                               String(doc["target"].as<const char*>()).equalsIgnoreCase("vibration") ||
+                                               String(doc["target"].as<const char*>()).equalsIgnoreCase("find"))) {
     int duration = doc["duration_ms"].as<int>();
+    if (duration <= 0) duration = doc["duration"].as<int>();
     if (duration <= 0) duration = 300;
+    bool withBuzzer = doc["with_buzzer"].as<bool>() ||
+                      String(doc["target"].as<const char*>()).equalsIgnoreCase("find") ||
+                      (doc["pattern"].is<const char*>() && String(doc["pattern"].as<const char*>()).equalsIgnoreCase("FIND"));
     triggerSingleVibe(duration);
-    lastEventLog = "Remote Vibration Triggered (" + String(duration) + "ms)";
+    if (withBuzzer) {
+      tone(BUZZER_PIN, 1800, duration);
+      lastEventLog = "Find Pod: Vibration + Buzzer (" + String(duration) + "ms)";
+    } else {
+      lastEventLog = "Remote Vibration Triggered (" + String(duration) + "ms)";
+    }
     sendAck("VIBRATE_TEST", "SUCCESS", lastEventLog.c_str());
   }
   // 4. Remote Drink Command (Simulation from Doctor/Postman/Caregiver)

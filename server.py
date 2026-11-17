@@ -330,17 +330,13 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
                 return
 
-        # 7. Serve Flutter Patient Mobile App Emulator
+        # 7. Unified Web Dashboard (redirect legacy /mobile, /app, /patient routes to /)
         elif self.path in ['/mobile', '/mobile/', '/app', '/patient']:
-            mobile_file = os.path.join(DIRECTORY, 'mobile.html')
-            if os.path.exists(mobile_file):
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self._send_cors_headers()
-                self.end_headers()
-                with open(mobile_file, 'rb') as f:
-                    self.wfile.write(f.read())
-                return
+            self.send_response(302)
+            self.send_header('Location', '/')
+            self._send_cors_headers()
+            self.end_headers()
+            return
 
         super().do_GET()
 
@@ -455,17 +451,31 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             publish_to_mqtt({"target": "alarm", "action": action})
             response_data = {"status": "success", "alarm_action": action, "mqtt_published": True}
 
-        # 5. POST /api/vibrate (Trigger vibration motor test)
+        # 5. POST /api/vibrate (Trigger vibration motor test / Find Pod with buzzer)
         elif self.path.startswith('/api/vibrate'):
             duration = int(body_json.get('duration_ms', body_json.get('duration', 300)))
             pattern = body_json.get('pattern', 'CUSTOM')
+            with_buzzer = bool(body_json.get('with_buzzer', str(pattern).upper() == 'FIND'))
             latest_telemetry['vibration_motor'] = 1
-            latest_telemetry['last_event'] = f"Vibration Test Triggered ({duration}ms)"
-            publish_to_mqtt({"target": "vibrate", "duration_ms": duration, "pattern": pattern})
+            latest_telemetry['last_event'] = (
+                f"Find Pod (Vibration + Buzzer {duration}ms)"
+                if with_buzzer
+                else f"Vibration Test Triggered ({duration}ms)"
+            )
+            publish_to_mqtt({
+                "target": "vibrate",
+                "duration_ms": duration,
+                "pattern": pattern,
+                "with_buzzer": with_buzzer,
+            })
             broadcast_sse(latest_telemetry)
             response_data = {
                 "status": "success",
-                "message": f"Triggered vibration motor ({duration}ms)",
+                "message": (
+                    f"Triggered Find Pod: vibration + buzzer ({duration}ms)"
+                    if with_buzzer
+                    else f"Triggered vibration motor ({duration}ms)"
+                ),
                 "mqtt_published": True,
                 "current_telemetry": latest_telemetry
             }

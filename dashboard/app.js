@@ -286,6 +286,8 @@ function sendCommand(cmdObj) {
 }
 
 // --- UPDATE METRICS FROM TELEMETRY ---
+let lastLoggedEvent = '';
+
 function updateDataFromESP32(data) {
   let prevDrank = state.drank;
 
@@ -305,7 +307,8 @@ function updateDataFromESP32(data) {
     addChartPoint(state.drank);
   }
 
-  if (data.last_event) {
+  if (data.last_event && data.last_event !== lastLoggedEvent) {
+    lastLoggedEvent = data.last_event;
     log(`[ESP32 Hardware Event]: ${data.last_event}`);
   }
 
@@ -574,14 +577,12 @@ function selectRingtone(tone) {
   state.ringtone = tone;
   localStorage.setItem('hydropod_ringtone', tone);
   updateUI();
-  playRingtoneMelody(tone);
-  log(`🔔 [ĐỔI TIẾNG CHUÔNG]: Đã đổi kiểu chuông sang ${tone}`, 'info');
-  sendCommand({ target: 'ringtone', tone: tone });
+  log(`🔔 [ĐỔI TIẾNG CHUÔNG]: Đã đổi kiểu chuông sang ${tone} (phát trên loa Wokwi)`, 'info');
+  sendCommand({ target: 'ringtone', tone: tone, preview: true });
 }
 
 function previewSelectedRingtone() {
-  playRingtoneMelody(state.ringtone);
-  log(`🔊 [NGHE THỬ CHUÔNG]: Đang phát chuông ${state.ringtone}...`, 'info');
+  log(`🔊 [NGHE THỬ CHUÔNG]: Đang phát chuông ${state.ringtone} trên loa Wokwi...`, 'info');
   sendCommand({ target: 'ringtone', tone: state.ringtone, preview: true });
 }
 

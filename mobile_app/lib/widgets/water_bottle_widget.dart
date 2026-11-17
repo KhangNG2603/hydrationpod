@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 
 class WaterBottleWidget extends StatefulWidget {
@@ -50,7 +51,7 @@ class _WaterBottleWidgetState extends State<WaterBottleWidget>
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isLow
-              ? const Color(0xFFF43F5E).withOpacity(0.65)
+              ? const Color(0xFFF43F5E).withValues(alpha: 0.65)
               : const Color(0xFF1E293B),
           width: isLow ? 1.5 : 1.0,
         ),
@@ -131,8 +132,8 @@ class _WaterBottleWidgetState extends State<WaterBottleWidget>
                       ),
                       decoration: BoxDecoration(
                         color: isLow
-                            ? const Color(0xFFF43F5E).withOpacity(0.15)
-                            : const Color(0xFF0EA5E9).withOpacity(0.15),
+                            ? const Color(0xFFF43F5E).withValues(alpha: 0.15)
+                            : const Color(0xFF0EA5E9).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(

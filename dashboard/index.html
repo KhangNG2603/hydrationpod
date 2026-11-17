@@ -26,31 +26,11 @@
         <div>
           <div class="brand-title-wrap">
             <h1>Smart Hydration Pod</h1>
-            <span class="system-badge">v2.5 IoT Cloud</span>
           </div>
-          <span class="sub-text">Hệ Thống Giám Sát Y Tế & Điều Khiển Nạp Dịch (ESP32 + MQTT + Haptic Engine)</span>
         </div>
       </div>
 
       <div class="header-controls">
-        <!-- Role Switcher (BTVN 3: User Management / Phân quyền đa người dùng) -->
-        <div class="role-selector" title="Phân quyền người dùng (BTVN 3)">
-          <span class="role-lbl">Vai Trò:</span>
-          <select id="user-role" onchange="switchRole(this.value)">
-            <option value="caregiver">👨‍⚕️ Bác Sĩ / Caregiver (Toàn Quyền)</option>
-            <option value="patient">👤 Bệnh Nhân (Chỉ Xem - Read Only)</option>
-          </select>
-        </div>
-
-        <!-- Patient Mobile App Link -->
-        <a href="/mobile" target="_blank" class="btn-api-docs" title="Mở giao diện Mobile App dành cho Bệnh nhân (Flutter UI)">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-            <line x1="12" y1="18" x2="12.01" y2="18"></line>
-          </svg>
-          <span>Patient Mobile App</span>
-        </a>
-
         <!-- API Tester Link -->
         <a href="/docs" target="_blank" class="btn-api-docs" title="Mở Web Postman & Tài liệu API">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -76,11 +56,10 @@
           <div class="card-header">
             <div class="title-with-pin">
               <h2>Tiến Độ Nạp Dịch Ngày</h2>
-              <span class="vpin-badge" title="Virtual Pin 0: Lượng nước đã uống">V0</span>
             </div>
             <div class="tag-group">
-              <span class="tag tag-success" id="safety-tag">🟢 AN TOÀN</span>
-              <span class="tag tag-goal" id="goal-badge" style="display: none;">🎉 ĐẠT 100% MỤC TIÊU</span>
+              <span class="tag tag-success" id="safety-tag"><span class="status-dot dot-green"></span>An toàn</span>
+              <span class="tag tag-goal" id="goal-badge" style="display: none;">Đạt 100% mục tiêu</span>
             </div>
           </div>
 
@@ -117,10 +96,10 @@
               <div class="progress-fill" id="progress-fill" style="width: 20%;"></div>
             </div>
             <div class="markers-row">
-              <span class="marker-item m-normal">🟢 0-80% An toàn</span>
-              <span class="marker-item m-warn">🟡 80% Tiệm cận</span>
-              <span class="marker-item m-danger">🔴 90% Nguy hiểm</span>
-              <span class="marker-item m-cap" id="label-cap-val">🚨 100% Hạn Mức</span>
+              <span class="marker-item m-normal"><span class="status-dot dot-green"></span>0–80% An toàn</span>
+              <span class="marker-item m-warn"><span class="status-dot dot-yellow"></span>80% Tiệm cận</span>
+              <span class="marker-item m-danger"><span class="status-dot dot-red"></span>90% Nguy hiểm</span>
+              <span class="marker-item m-cap" id="label-cap-val">100% Hạn mức</span>
             </div>
           </div>
         </div>
@@ -130,9 +109,8 @@
           <div class="card-header">
             <div class="title-with-pin">
               <h2>Điều Khiển Chỉ Định Y Tế</h2>
-              <span class="vpin-badge" title="Virtual Pin 6: Cấu hình phác đồ">V6</span>
             </div>
-            <span class="lock-indicator" id="lock-badge" style="display: none;">🔒 Chế Độ Bệnh Nhân (Khóa Cấu Hình)</span>
+            <span class="lock-indicator" id="lock-badge" style="display: none;">Chế độ chỉ xem</span>
           </div>
 
           <!-- Profile Buttons -->
@@ -140,24 +118,24 @@
             <label class="control-lbl">1. Chỉ Định Phác Đồ Bệnh Lý:</label>
             <div class="profile-grid">
               <button class="btn-opt active" id="btn-std" onclick="setProfile('STANDARD')">
-                <span class="opt-icon">👤</span>
+                <span class="opt-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                 <span class="opt-content">
                   <strong>Chuẩn</strong>
                   <small>2000ml / ngày (Nhắc 60p)</small>
                 </span>
               </button>
               <button class="btn-opt" id="btn-heart" onclick="setProfile('HEART_FAILURE')">
-                <span class="opt-icon">🫀</span>
+                <span class="opt-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
                 <span class="opt-content">
                   <strong>Suy Tim / Thận</strong>
-                  <small>1000ml Trần Cứng (Nhắc 45p)</small>
+                  <small>1000ml Trần cứng (Nhắc 45p)</small>
                 </span>
               </button>
               <button class="btn-opt" id="btn-gout" onclick="setProfile('GOUT')">
-                <span class="opt-icon">💧</span>
+                <span class="opt-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span>
                 <span class="opt-content">
                   <strong>Sỏi Thận / Gout</strong>
-                  <small>2500ml Tăng Cường (Nhắc 30p)</small>
+                  <small>2500ml Tăng cường (Nhắc 30p)</small>
                 </span>
               </button>
             </div>
@@ -186,60 +164,38 @@
             </div>
             <div class="ringtone-grid">
               <button class="btn-tone active" id="tone-chime" onclick="selectRingtone('CHIME')">
-                <span class="tone-icon">🔔</span>
+                <span class="tone-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
                 <span class="tone-info">
-                  <strong>Nhẹ Nhàng</strong>
+                  <strong>Nhẹ nhàng</strong>
                   <small>Chime êm ái</small>
                 </span>
               </button>
               <button class="btn-tone" id="tone-melodic" onclick="selectRingtone('MELODIC')">
-                <span class="tone-icon">🎵</span>
+                <span class="tone-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
                 <span class="tone-info">
-                  <strong>Giai Điệu</strong>
+                  <strong>Giai điệu</strong>
                   <small>Du dương Arpeggio</small>
                 </span>
               </button>
               <button class="btn-tone" id="tone-digital" onclick="selectRingtone('DIGITAL')">
-                <span class="tone-icon">⚡</span>
+                <span class="tone-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
                 <span class="tone-info">
-                  <strong>Kỹ Thuật Số</strong>
+                  <strong>Kỹ thuật số</strong>
                   <small>Beep điện tử</small>
                 </span>
               </button>
               <button class="btn-tone" id="tone-siren" onclick="selectRingtone('SIREN')">
-                <span class="tone-icon">🚨</span>
+                <span class="tone-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                 <span class="tone-info">
-                  <strong>Còi Y Tế</strong>
+                  <strong>Còi y tế</strong>
                   <small>Siren dồn dập</small>
                 </span>
               </button>
-              <button class="btn-tone" id="tone-custom" onclick="selectRingtone('CUSTOM')">
-                <span class="tone-icon">🎵</span>
-                <span class="tone-info">
-                  <strong>Tùy Chỉnh (MP3)</strong>
-                  <small id="custom-mp3-label">File người dùng</small>
-                </span>
-              </button>
             </div>
-
-            <!-- MP3 Upload Input & Actions -->
-            <div class="mp3-upload-bar">
-              <input type="file" id="mp3-file-input" accept=".mp3,audio/mpeg,audio/mp3,audio/*" style="display: none;" onchange="handleMp3Upload(event)">
-              <button class="btn-upload-mp3" onclick="document.getElementById('mp3-file-input').click()" title="Chọn file .mp3 từ máy tính của bạn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <span>Tải File .MP3 Lên</span>
-              </button>
-              <span class="mp3-filename" id="mp3-display-name">Chưa chọn file MP3</span>
-            </div>
-            <audio id="custom-audio-player" preload="auto"></audio>
           </div>
 
           <!-- Interactive Action Buttons -->
-          <div class="control-actions-grid">
+          <div class="control-actions-grid" style="grid-template-columns: 1fr;">
             <button class="btn-action btn-mute" id="btn-mute" onclick="toggleMute()" title="Bật/Tắt còi báo động khẩn cấp (Virtual Pin 7)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -247,32 +203,6 @@
                 <line x1="17" y1="9" x2="23" y2="15"></line>
               </svg>
               <span id="txt-mute">Tắt Còi</span>
-              <span class="vpin-badge-inline">V7</span>
-            </button>
-
-            <button class="btn-action btn-vibe" id="btn-vibe" onclick="testVibration()" title="Kích hoạt xung rung xúc giác 300ms qua Cloud MQTT">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <rect x="5" y="2" width="14" height="20" rx="3"></rect>
-                <line x1="1" y1="9" x2="1" y2="15"></line>
-                <line x1="23" y1="9" x2="23" y2="15"></line>
-              </svg>
-              <span>Test Rung (GPIO 5)</span>
-            </button>
-
-            <button class="btn-action btn-refill" onclick="refillBottle(350)" title="Mô phỏng châm thêm nước vào bình">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                <line x1="12" y1="11" x2="12" y2="17"></line>
-                <line x1="9" y1="14" x2="15" y2="14"></line>
-              </svg>
-              <span>Châm Nước (+350ml)</span>
-            </button>
-
-            <button class="btn-action btn-reset" onclick="resetDay()" title="Đặt lại toàn bộ chỉ số nạp dịch trong ngày">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path>
-              </svg>
-              <span>Reset Ngày</span>
             </button>
           </div>
         </div>
@@ -285,16 +215,14 @@
           <div class="card stat-card" id="card-bottle">
             <div class="stat-top">
               <span class="stat-lbl">Nước Trong Bình</span>
-              <span class="vpin-badge" title="Virtual Pin 1: Load Cell HX711">V1</span>
             </div>
             <div class="stat-val" id="val-bottle">500 <small>ml</small></div>
-            <div id="bottle-refill-badge" class="alert-pulse-badge" style="display: none;">⚠️ CẠN NƯỚC: HÃY CHÂM THÊM</div>
+            <div id="bottle-refill-badge" class="alert-pulse-badge" style="display: none;">Cạn nước — cần châm thêm</div>
           </div>
 
           <div class="card stat-card">
             <div class="stat-top">
               <span class="stat-lbl">Thời Gian Nhàn Rỗi</span>
-              <span class="vpin-badge" title="Virtual Pin 3: Bộ đếm Idle FSM">V3</span>
             </div>
             <div class="stat-val" id="val-idle">12 <small>giây</small></div>
             <div class="stat-sub-info" id="idle-status-text">Hoạt động bình thường</div>
@@ -303,7 +231,6 @@
           <div class="card stat-card">
             <div class="stat-top">
               <span class="stat-lbl">Dung Lượng Pin (ADC)</span>
-              <span class="vpin-badge" title="Virtual Pin 5: Cảm biến điện áp pin">V5</span>
             </div>
             <div class="stat-val" id="val-bat">85 <small>%</small></div>
             <div class="battery-bar-wrap">
@@ -314,7 +241,6 @@
           <div class="card stat-card" id="card-vibe">
             <div class="stat-top">
               <span class="stat-lbl">Bộ Rung Xúc Giác</span>
-              <span class="vpin-badge" title="Động cơ Haptic GPIO 5">Haptic</span>
             </div>
             <div class="stat-val" id="val-vibe">Sẵn sàng</div>
             <div class="haptic-pulse-indicator" id="haptic-indicator">
@@ -363,6 +289,32 @@
               <small>Báo động khẩn cấp + Modal can thiệp</small>
             </button>
           </div>
+          <div class="control-actions-grid" style="margin-top: 12px; grid-template-columns: repeat(3, 1fr);">
+            <button class="btn-action btn-vibe" id="btn-vibe" onclick="testVibration()" title="Kích hoạt xung rung xúc giác 300ms qua Cloud MQTT">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+                <line x1="1" y1="9" x2="1" y2="15"></line>
+                <line x1="23" y1="9" x2="23" y2="15"></line>
+              </svg>
+              <span>Test Rung (GPIO 5)</span>
+            </button>
+
+            <button class="btn-action btn-refill" onclick="refillBottle(350)" title="Mô phỏng châm thêm nước vào bình">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+              <span>Châm Nước (+350ml)</span>
+            </button>
+
+            <button class="btn-action btn-reset" onclick="resetDay()" title="Đặt lại toàn bộ chỉ số nạp dịch trong ngày">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path>
+              </svg>
+              <span>Reset Ngày</span>
+            </button>
+          </div>
         </div>
 
         <!-- Event Log & Feedback Loop ACK Widget (BTVN 2 & BTVN 3) -->
@@ -383,22 +335,22 @@
     <!-- Emergency Modal Pop-up (Biên an toàn kép - BTVN 2) -->
     <div class="modal" id="modal">
       <div class="modal-content">
-        <div class="siren">🚨</div>
-        <h2>BÁO ĐỘNG KHẨN CẤP Y TẾ</h2>
-        <p class="modal-desc">Bệnh nhân đã vượt trần nạp dịch cho phép (Hard Cap Safe Margin)!</p>
+        <div class="siren"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <h2>Báo động khẩn cấp y tế</h2>
+        <p class="modal-desc">Bệnh nhân đã vượt trần nạp dịch cho phép (Hard Cap Safe Margin)</p>
         <div class="modal-stats">
           <div class="modal-stat-box">
-            <span>ĐÃ NẠP</span>
+            <span>Đã nạp</span>
             <strong id="m-drank">1050</strong> ml
           </div>
           <div class="modal-stat-divider">&gt;</div>
           <div class="modal-stat-box highlight">
-            <span>HẠN MỨC TRẦN</span>
+            <span>Hạn mức trần</span>
             <strong id="m-cap">1000</strong> ml
           </div>
         </div>
-        <p class="modal-note">⚠️ Yêu cầu Bác sĩ / Điều dưỡng can thiệp lâm sàng ngay lập tức!</p>
-        <button class="btn-ack" onclick="ackEmergency()">ĐÃ XÁC NHẬN CAN THIỆP Y TẾ</button>
+        <p class="modal-note">Yêu cầu Bác sĩ / Điều dưỡng can thiệp lâm sàng ngay lập tức</p>
+        <button class="btn-ack" onclick="ackEmergency()">Xác nhận can thiệp y tế</button>
       </div>
     </div>
   </div>

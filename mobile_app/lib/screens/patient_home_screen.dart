@@ -1,3 +1,4 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../models/telemetry_model.dart';
 import '../services/hydropod_service.dart';
@@ -29,10 +30,10 @@ class PatientHomeScreen extends StatelessWidget {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0EA5E9).withOpacity(0.15),
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: const Color(0xFF38BDF8).withOpacity(0.4),
+                      color: const Color(0xFF38BDF8).withValues(alpha: 0.4),
                     ),
                   ),
                   child: const Icon(
@@ -73,8 +74,8 @@ class PatientHomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: (service.isServerConnected || service.isMqttConnected)
-                      ? const Color(0xFF10B981).withOpacity(0.15)
-                      : const Color(0xFFF59E0B).withOpacity(0.15),
+                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                      : const Color(0xFFF59E0B).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -173,10 +174,10 @@ class PatientHomeScreen extends StatelessWidget {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'CẢNH BÁO Y TẾ: ĐÃ VƯỢT HẠN MỨC NƯỚC!',
+                  'Vượt hạn mức nước chỉ định',
                   style: TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: Color(0xFFFECACA),
                   ),
                 ),
@@ -217,17 +218,17 @@ class PatientHomeScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF3B0764).withOpacity(0.35),
+        color: const Color(0xFF3B0764).withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFF43F5E)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.Opacity_rounded, color: Color(0xFFF43F5E)),
+          const Icon(Icons.opacity_rounded, color: Color(0xFFF43F5E)),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Bình nước đã cạn (≤ 40ml)! Hãy châm thêm nước để tiếp tục theo dõi.',
+              'Bình nước sắp cạn (≤ 40 ml). Hãy châm thêm nước để tiếp tục theo dõi',
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
@@ -321,7 +322,7 @@ class PatientHomeScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
-                        Icons.medical_Information_outlined,
+                        Icons.medical_information_outlined,
                         size: 14,
                         color: Color(0xFF38BDF8),
                       ),
@@ -345,7 +346,7 @@ class PatientHomeScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: ringColor.withOpacity(0.15),
+                  color: ringColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -406,7 +407,7 @@ class PatientHomeScreen extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: ringColor.withOpacity(0.15),
+                        color: ringColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -426,7 +427,7 @@ class PatientHomeScreen extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             isOvercap
-                ? '⚠️ Đã vượt mức trần y tế! Tuyệt đối không uống thêm.'
+                ? 'Đã vượt mức trần y tế. Ngưng nạp thêm nước'
                 : 'Còn có thể nạp an toàn hôm nay: ${t.remainingSafeMl.toInt()} ml',
             style: TextStyle(
               fontSize: 13,
@@ -583,7 +584,7 @@ class PatientHomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => service.testVibration(300),
+                  onPressed: () => service.testVibration(500, true),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFFBBF24),
                     side: const BorderSide(color: Color(0xFF78350F)),
@@ -594,7 +595,7 @@ class PatientHomeScreen extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.vibration_rounded, size: 17),
                   label: const Text(
-                    'Tìm bình (Rung)',
+                    'Tìm bình (Rung + Còi)',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -627,30 +628,28 @@ class PatientHomeScreen extends StatelessWidget {
 
   Widget _buildRingtoneCard(TelemetryModel t) {
     final tones = [
-      {'id': 'CHIME', 'label': '🔔 Chuông Đôi'},
-      {'id': 'MELODIC', 'label': '🎵 Giai Điệu'},
-      {'id': 'DIGITAL', 'label': '📟 Bíp Y Tế'},
-      {'id': 'SIREN', 'label': '🚨 Còi Khẩn'},
-      {'id': 'CUSTOM', 'label': '🎧 Nhạc MP3'},
+      {'id': 'CHIME', 'label': 'Chuông đôi'},
+      {'id': 'MELODIC', 'label': 'Giai điệu'},
+      {'id': 'DIGITAL', 'label': 'Bíp y tế'},
+      {'id': 'SIREN', 'label': 'Còi khẩn'},
     ];
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF111927),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        color: const Color(0xFF11141C),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF1E2430)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'TÙY CHỈNH ÂM BÁO NHẮC UỐNG NƯỚC',
+            'Âm báo nhắc uống nước',
             style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-              color: Color(0xFF94A3B8),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFA3A9B8),
             ),
           ),
           const SizedBox(height: 10),
@@ -664,7 +663,7 @@ class PatientHomeScreen extends StatelessWidget {
                 label: Text(item['label']!),
                 selected: isSelected,
                 onSelected: (_) => service.setRingtone(item['id']!),
-                selectedColor: const Color(0xFF0EA5E9).withOpacity(0.25),
+                selectedColor: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
                 backgroundColor: const Color(0xFF0B0F17),
                 labelStyle: TextStyle(
                   fontSize: 12,
@@ -688,38 +687,145 @@ class PatientHomeScreen extends StatelessWidget {
 
   void _showServerDialog(BuildContext context) {
     final controller = TextEditingController(text: service.apiBaseUrl);
+    String selectedProfile = service.telemetry.profile.toUpperCase();
+    if (!['STANDARD', 'HEART_FAILURE', 'GOUT'].contains(selectedProfile)) {
+      selectedProfile = 'STANDARD';
+    }
+    double hardCap = service.telemetry.hardCapMl > 0
+        ? service.telemetry.hardCapMl.clamp(600, 2000).toDouble()
+        : 1000.0;
+
+    final profiles = [
+      {'id': 'STANDARD', 'label': 'Tiêu chuẩn (2000 ml)'},
+      {'id': 'HEART_FAILURE', 'label': 'Suy tim / Thận (Giới hạn trần)'},
+      {'id': 'GOUT', 'label': 'Sỏi thận / Gout (3000 ml)'},
+    ];
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF111927),
-        title: const Text(
-          'Cấu hình địa chỉ Server IoT',
-          style: TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            labelText: 'REST API URL (VD: http://10.0.2.2:8000)',
-            labelStyle: TextStyle(color: Color(0xFF94A3B8)),
-            enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF334155)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF11141C),
+          title: const Text(
+            'Cài đặt hệ thống & Chỉ thị y tế',
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'REST API URL (VD: http://10.0.2.2:8000)',
+                    labelStyle: TextStyle(color: Color(0xFFA3A9B8)),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFF282E3D)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(color: Color(0xFF1E2430)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Điều chỉnh chỉ thị y tế',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFA3A9B8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...profiles.map((item) {
+                  final isSelected = selectedProfile == item['id'];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: InkWell(
+                      onTap: () {
+                        setDialogState(() {
+                          selectedProfile = item['id']!;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF0EA5E9).withValues(alpha: 0.18)
+                              : const Color(0xFF0B0F17),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : const Color(0xFF1E293B),
+                          ),
+                        ),
+                        child: Text(
+                          item['label']!,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? const Color(0xFF38BDF8)
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                if (selectedProfile == 'HEART_FAILURE') ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Trần cứng tối đa: ${hardCap.toInt()} ml/ngày',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFF87171),
+                    ),
+                  ),
+                  Slider(
+                    value: hardCap,
+                    min: 600,
+                    max: 2000,
+                    divisions: 28,
+                    activeColor: const Color(0xFFEF4444),
+                    onChanged: (val) {
+                      setDialogState(() {
+                        hardCap = val;
+                      });
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                service.updateApiBaseUrl(controller.text);
+                await service.setProfile(
+                  selectedProfile,
+                  hardCap: selectedProfile == 'HEART_FAILURE'
+                      ? hardCap.toInt()
+                      : 0,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Lưu & Áp dụng'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              service.updateApiBaseUrl(controller.text);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Lưu & Kết nối'),
-          ),
-        ],
       ),
     );
   }
