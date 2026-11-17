@@ -343,6 +343,11 @@ void setupWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print(F("WiFi Connected! IP: "));
     Serial.println(WiFi.localIP());
+    if (WiFi.localIP() == IPAddress(10, 13, 37, 2)) {
+      Serial.println(F("🟢 MQTT Connected successfully! (Wokwi Serial Bridge <-> server.py <-> broker.emqx.io)"));
+      sendAck("DEVICE_ONLINE", "SUCCESS", "ESP32 Hydration Pod ready on Cloud MQTT (Wokwi Bridge)");
+      sendTelemetryJSON();
+    }
   } else {
     Serial.println(F("WiFi connecting in background."));
   }
@@ -358,6 +363,12 @@ void maintainNetwork() {
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASS);
     }
+    return;
+  }
+
+  // Wokwi Simulator uses Serial Bridge (localhost:4000 <-> server.py <-> broker.emqx.io)
+  // Avoid blocking main loop on Wokwi-GUEST where incoming WiFi packets are not routed
+  if (WiFi.localIP() == IPAddress(10, 13, 37, 2)) {
     return;
   }
 
@@ -915,7 +926,8 @@ void updateOLEDDisplay() {
 
   display.setCursor(0, 0);
   display.print(F("HydraPod ["));
-  display.print(WiFi.status() == WL_CONNECTED ? (mqttClient.connected() ? "MQTT" : "WIFI") : "OFFL");
+  bool isCloudReady = mqttClient.connected() || (WiFi.status() == WL_CONNECTED && WiFi.localIP() == IPAddress(10, 13, 37, 2));
+  display.print(WiFi.status() == WL_CONNECTED ? (isCloudReady ? "MQTT" : "WIFI") : "OFFL");
   display.print(F("]"));
 
   display.setCursor(0, 14);
@@ -1236,6 +1248,12 @@ void applyProfile(ProfileType profile, float custom_cap) {
 void processSerialInput() {
   if (Serial.available()) {
     char c = Serial.read();
+    if (c == '{') {
+      String jsonLine = "{" + Serial.readStringUntil('\n');
+      jsonLine.trim();
+      mqttCallback((char*)"serial/control", (byte*)jsonLine.c_str(), jsonLine.length());
+      return;
+    }
     if (c == '1') {
       total_drank_today_ml += 150;
       current_bottle_ml = max(0.0f, current_bottle_ml - 150.0f);

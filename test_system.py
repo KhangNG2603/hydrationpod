@@ -217,7 +217,10 @@ def main():
         req = urllib.request.Request(f"{API_BASE}/mobile", method="GET")
         with urllib.request.urlopen(req, timeout=5) as resp:
             mobile_html = resp.read().decode("utf-8")
-            http_ok = (resp.status == 200 and "HydraPod Patient" in mobile_html)
+            http_ok = (
+                resp.status == 200
+                and ("Smart Hydration Pod" in mobile_html or "HydraPod Patient" in mobile_html)
+            )
         flutter_files = [
             "mobile_app/pubspec.yaml",
             "mobile_app/lib/main.dart",

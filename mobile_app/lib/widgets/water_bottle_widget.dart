@@ -11,7 +11,7 @@ class WaterBottleWidget extends StatefulWidget {
   const WaterBottleWidget({
     super.key,
     required this.bottleMl,
-    this.maxCapacityMl = 500.0,
+    this.maxCapacityMl = 2000.0,
     required this.isEmpty,
     required this.onQuickRefill,
   });

@@ -20,7 +20,7 @@ class TelemetryModel {
   const TelemetryModel({
     this.deviceId = 'HYDROPOD_01',
     this.drankTodayMl = 0.0,
-    this.bottleMl = 500.0,
+    this.bottleMl = 2000.0,
     this.goalMl = 2000.0,
     this.hardCapMl = 0.0,
     this.progressPct = 0.0,
@@ -39,7 +39,7 @@ class TelemetryModel {
 
   factory TelemetryModel.fromJson(Map<String, dynamic> json) {
     final drank = (json['drank_today_ml'] ?? json['v0'] ?? 0).toDouble();
-    final bottle = (json['bottle_ml'] ?? json['v1'] ?? 500).toDouble();
+    final bottle = (json['bottle_ml'] ?? json['v1'] ?? 2000).toDouble();
     final goal = (json['goal_ml'] ?? 2000).toDouble();
     final cap = (json['hard_cap_ml'] ?? 0).toDouble();
     final target = cap > 0 ? cap : (goal > 0 ? goal : 2000.0);
@@ -76,8 +76,8 @@ class TelemetryModel {
   double get remainingSafeMl =>
       (effectiveTargetMl - drankTodayMl).clamp(0.0, effectiveTargetMl);
 
-  /// Bottle fill ratio (0.0 to 1.0 based on 500ml bottle capacity)
-  double get bottleFillRatio => (bottleMl / 500.0).clamp(0.0, 1.0);
+  /// Bottle fill ratio (0.0 to 1.0 based on 2000ml bottle capacity)
+  double get bottleFillRatio => (bottleMl / 2000.0).clamp(0.0, 1.0);
 
   /// Human-readable Vietnamese medical profile label for patient
   String get profileDisplayName {

@@ -6,6 +6,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/telemetry_model.dart';
+import 'background_notification_service.dart';
 
 class HydrationPoint {
   final DateTime time;
@@ -194,6 +195,7 @@ class HydropodService extends ChangeNotifier {
       _saveHistory();
     }
     _telemetry = next;
+    BackgroundNotificationService.handleTelemetryAlert(next);
     notifyListeners();
   }
 

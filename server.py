@@ -33,12 +33,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIRECTORY = os.path.join(BASE_DIR, 'dashboard')
 DB_PATH = os.path.join(BASE_DIR, 'hydrationpod.db')
 
-MQTT_BROKER = os.environ.get("MQTT_BROKER", "broker.emqx.io")
-MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
-MQTT_USE_TLS = os.environ.get("MQTT_USE_TLS", "0") == "1"
+MQTT_BROKER = os.environ.get("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", 8883))
+MQTT_USE_TLS = os.environ.get("MQTT_USE_TLS", "1") == "1"
 MQTT_CA_CERT = os.environ.get("MQTT_CA_CERT", os.path.join(BASE_DIR, "security/certs/ca.crt"))
-MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "")
-MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "")
+MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "server_bridge")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "hydropod123")
 
 API_KEY = os.environ.get("HYDROPOD_API_KEY", "hydropod-dev-key-2026")
 REQUIRE_AUTH = os.environ.get("HYDROPOD_REQUIRE_AUTH", "0") == "1"
@@ -224,6 +224,13 @@ def broadcast_sse(data):
                 to_remove.append(client)
         for client in to_remove:
             connected_clients.remove(client)
+    if data is latest_telemetry and mqtt_client and mqtt_client.is_connected():
+        try:
+            echo_doc = dict(latest_telemetry)
+            echo_doc["_bridge_echo"] = True
+            mqtt_client.publish(TOPIC_TELEMETRY, json.dumps(echo_doc))
+        except Exception:
+            pass
 
 def evaluate_safety():
     cap = latest_telemetry.get("hard_cap_ml", 0)
@@ -282,8 +289,20 @@ def wokwi_serial_bridge_thread():
                             t_data = json.loads(json_str)
                             for k, v in t_data.items():
                                 latest_telemetry[k] = v
+                            record_telemetry(latest_telemetry)
                             broadcast_sse(latest_telemetry)
                             print(f"🔄 [Wokwi Serial Telemetry]: Drank={t_data.get('drank_today_ml')}ml, Bottle={t_data.get('bottle_ml')}ml")
+                        except Exception:
+                            pass
+                    elif "[FEEDBACK ACK] ->" in line:
+                        ack_str = line.split("[FEEDBACK ACK] ->", 1)[1].strip()
+                        try:
+                            ack_data = json.loads(ack_str)
+                            latest_telemetry["last_ack"] = ack_data
+                            if mqtt_client and mqtt_client.is_connected():
+                                mqtt_client.publish(TOPIC_ACK, json.dumps(ack_data))
+                            broadcast_sse({"ack": ack_data, "current_telemetry": latest_telemetry})
+                            print(f"✅ [Wokwi Serial ACK]: Command={ack_data.get('command')} -> Status={ack_data.get('status')}")
                         except Exception:
                             pass
                     elif "[SENSOR DRINK DETECTED]" in line:
@@ -324,9 +343,12 @@ def on_mqtt_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode('utf-8'))
         if msg.topic == TOPIC_TELEMETRY:
+            if payload.get("_bridge_echo"):
+                return
             print(f"🔄 [MQTT Telemetry Received]: Drank={payload.get('drank_today_ml')}ml, Bottle={payload.get('bottle_ml')}ml, Safety={payload.get('safety_status')}, Vib={payload.get('vibration_motor')}")
             for k, v in payload.items():
-                latest_telemetry[k] = v
+                if k != "_bridge_echo":
+                    latest_telemetry[k] = v
             record_telemetry(latest_telemetry)
             broadcast_sse(latest_telemetry)
         elif msg.topic == TOPIC_ACK:
@@ -579,15 +601,18 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
 
         response_data = {}
 
-        # 1. POST /api/command (Postman command test)
+        # 1. POST /api/command (Postman & Web Dashboard command handler)
         if self.path.startswith('/api/command'):
             cmd = body_json.get('command', '')
-            if cmd == 'SIM_DEMO_SCENARIO_1' or cmd == '1':
-                latest_telemetry['drank_today_ml'] += 150
-                latest_telemetry['bottle_ml'] = max(0, latest_telemetry['bottle_ml'] - 150)
+            target = str(body_json.get('target', '')).lower()
+            if cmd == 'SIM_DEMO_SCENARIO_1' or cmd == '1' or target == 'drink' or cmd == 'drink':
+                amt = float(body_json.get('amount', body_json.get('amount_ml', 150)))
+                latest_telemetry['drank_today_ml'] += amt
+                latest_telemetry['bottle_ml'] = max(0, latest_telemetry['bottle_ml'] - amt)
                 latest_telemetry['idle_sec'] = 0
-                latest_telemetry['last_event'] = 'Postman Executed Demo 1 (+150ml)'
-                publish_to_mqtt({"command": "SIM_DEMO_SCENARIO_1"})
+                latest_telemetry['alert_level'] = 0
+                latest_telemetry['last_event'] = f'Demo / Remote Drink (+{int(amt)}ml)'
+                publish_to_mqtt({"target": "drink", "amount": amt} if target == 'drink' else {"command": "SIM_DEMO_SCENARIO_1"})
             elif cmd == 'SIM_DEMO_SCENARIO_2' or cmd == '2':
                 latest_telemetry['idle_sec'] = 35
                 latest_telemetry['alert_level'] = 2
@@ -600,14 +625,53 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                 latest_telemetry['drank_today_ml'] = 1050
                 latest_telemetry['last_event'] = 'Postman Executed Demo 3 (Overcap Emergency 1050/1000ml)'
                 publish_to_mqtt({"command": "SIM_DEMO_SCENARIO_3"})
-            elif cmd == 'RESET_DAY':
+            elif cmd == 'RESET_DAY' or target == 'reset' or cmd == 'reset':
                 latest_telemetry['drank_today_ml'] = 0
                 latest_telemetry['bottle_ml'] = 500
                 latest_telemetry['idle_sec'] = 0
+                latest_telemetry['alert_level'] = 0
                 latest_telemetry['last_event'] = 'Postman Executed Day Reset'
-                publish_to_mqtt({"command": "RESET_DAY"})
+                publish_to_mqtt({"target": "reset"})
+            elif target == 'refill' or cmd == 'refill':
+                amt = float(body_json.get('amount', body_json.get('amount_ml', 350)))
+                latest_telemetry['bottle_ml'] = min(1000, latest_telemetry['bottle_ml'] + amt)
+                latest_telemetry['last_event'] = f'Refilled +{int(amt)}ml'
+                publish_to_mqtt({"target": "refill", "amount": amt})
+            elif target == 'profile':
+                prof = str(body_json.get('mode', body_json.get('profile', 'STANDARD'))).upper()
+                hard_cap = float(body_json.get('hard_cap', 0))
+                latest_telemetry['profile'] = prof
+                if prof == 'STANDARD':
+                    latest_telemetry['goal_ml'] = 2000
+                    latest_telemetry['hard_cap_ml'] = 0
+                elif prof == 'HEART_FAILURE':
+                    latest_telemetry['goal_ml'] = hard_cap if hard_cap > 0 else 1000
+                    latest_telemetry['hard_cap_ml'] = latest_telemetry['goal_ml']
+                elif prof == 'GOUT':
+                    latest_telemetry['goal_ml'] = 2500
+                    latest_telemetry['hard_cap_ml'] = 0
+                latest_telemetry['last_event'] = f'Profile switched to {prof}'
+                publish_to_mqtt({"target": "profile", "mode": prof, "hard_cap": latest_telemetry['hard_cap_ml']})
+            elif target == 'alarm':
+                action = str(body_json.get('action', 'MUTE')).upper()
+                latest_telemetry['is_muted'] = (action == 'MUTE')
+                if action == 'MUTE':
+                    latest_telemetry['vibration_motor'] = 0
+                latest_telemetry['last_event'] = f'Alarm {action}'
+                publish_to_mqtt({"target": "alarm", "action": action})
+            elif target in ('vibrate', 'vibration', 'find') or cmd == 'TEST_VIBRATION':
+                duration = int(body_json.get('duration_ms', body_json.get('duration', 300)))
+                with_buzzer = bool(body_json.get('with_buzzer', False))
+                latest_telemetry['vibration_motor'] = 1
+                latest_telemetry['last_event'] = f'Vibration Triggered ({duration}ms)'
+                publish_to_mqtt({"target": "vibrate", "duration_ms": duration, "with_buzzer": with_buzzer})
+            elif target == 'ringtone':
+                r_tone = str(body_json.get('tone', body_json.get('ringtone', 'CHIME'))).upper()
+                latest_telemetry['ringtone'] = r_tone
+                latest_telemetry['last_event'] = f'Ringtone set to {r_tone}'
+                publish_to_mqtt({"target": "ringtone", "tone": r_tone, "preview": True})
             else:
-                publish_to_mqtt({"command": cmd})
+                publish_to_mqtt(body_json if body_json else {"command": cmd})
 
             evaluate_safety()
             latest_telemetry['progress_pct'] = round((latest_telemetry['drank_today_ml'] / max(1, latest_telemetry['goal_ml'])) * 100, 1)
@@ -762,6 +826,8 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             latest_telemetry['bottle_ml'] = 500
             latest_telemetry['idle_sec'] = 0
             latest_telemetry['alert_level'] = 0
+            latest_telemetry['progress_pct'] = 0.0
+            latest_telemetry['last_event'] = 'Daily stats reset'
             evaluate_safety()
             publish_to_mqtt({"target": "reset"})
             broadcast_sse(latest_telemetry)

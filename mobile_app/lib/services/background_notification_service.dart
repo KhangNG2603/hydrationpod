@@ -9,6 +9,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import '../models/telemetry_model.dart';
 
+@pragma('vm:entry-point')
 class BackgroundNotificationService {
   static const String _alertChannelId = 'hydropod_alerts';
   static const String _mqttBroker = 'broker.emqx.io';
@@ -17,6 +18,45 @@ class BackgroundNotificationService {
 
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static int _lastAlertLevel = 0;
+  static DateTime? _lastAlertTime;
+
+  static Future<void> showReminderAlert(TelemetryModel t) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await _notifications.show(
+      id: 104,
+      title: 'Nhắc nhở uống nước (Cấp ${t.alertLevel})',
+      body:
+          'Bạn chưa uống nước trong ${t.idleSec}s. Tiến độ hôm nay: ${t.drankTodayMl.toInt()}/${t.goalMl.toInt()} ml.',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _alertChannelId,
+          'Nhắc nhở uống nước',
+          channelDescription: 'Thông báo khi quên uống nước',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+      ),
+    );
+  }
+
+  /// Show a phone notification when alert level reaches >= 2 (with 60s cooldown)
+  static void handleTelemetryAlert(TelemetryModel t) {
+    if (kIsWeb || !Platform.isAndroid) return;
+    final now = DateTime.now();
+    final cooldownPassed =
+        _lastAlertTime == null ||
+        now.difference(_lastAlertTime!).inSeconds >= 60;
+
+    if (t.alertLevel >= 2 &&
+        (t.alertLevel != _lastAlertLevel || cooldownPassed)) {
+      _lastAlertTime = now;
+      showReminderAlert(t);
+    }
+    _lastAlertLevel = t.alertLevel;
+  }
 
   static Future<void> initialize() async {
     if (kIsWeb || !Platform.isAndroid) return;
@@ -44,16 +84,18 @@ class BackgroundNotificationService {
       );
     }
 
-    final bgService = FlutterBackgroundService();
-    await bgService.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: true,
-        isForegroundMode: false,
-      ),
-      iosConfiguration: IosConfiguration(autoStart: false),
-    );
-    await bgService.startService();
+    try {
+      final bgService = FlutterBackgroundService();
+      await bgService.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: onStart,
+          autoStart: true,
+          isForegroundMode: false,
+        ),
+        iosConfiguration: IosConfiguration(autoStart: false),
+      );
+      await bgService.startService();
+    } catch (_) {}
   }
 
   @pragma('vm:entry-point')
@@ -68,33 +110,13 @@ class BackgroundNotificationService {
     int lastAlertLevel = 0;
     DateTime? lastAlertTime;
 
-    Future<void> showReminderAlert(TelemetryModel t) async {
-      await _notifications.show(
-        id: 104,
-        title: 'Nhắc nhở uống nước (Cấp ${t.alertLevel})',
-        body:
-            'Bạn chưa uống nước trong ${t.idleSec}s. Tiến độ hôm nay: ${t.drankTodayMl.toInt()}/${t.goalMl.toInt()} ml.',
-        notificationDetails: const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _alertChannelId,
-            'Nhắc nhở uống nước',
-            channelDescription: 'Thông báo khi quên uống nước',
-            importance: Importance.high,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-          ),
-        ),
-      );
-    }
-
     void handleTelemetry(TelemetryModel t) {
       final now = DateTime.now();
       final cooldownPassed =
           lastAlertTime == null ||
           now.difference(lastAlertTime!).inSeconds >= 60;
 
-      if (t.alertLevel >= 1 &&
+      if (t.alertLevel >= 2 &&
           (t.alertLevel != lastAlertLevel || cooldownPassed)) {
         showReminderAlert(t);
         lastAlertTime = now;

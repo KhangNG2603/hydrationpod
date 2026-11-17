@@ -207,10 +207,12 @@ const TOPIC_TELEMETRY = 'smartbottle/HYDROPOD_01/telemetry';
 const TOPIC_CONTROL   = 'smartbottle/HYDROPOD_01/control';
 const TOPIC_ACK       = 'smartbottle/HYDROPOD_01/ack';
 
+let sseInitialized = false;
+
 function initMQTT() {
+  initSSEFallback();
   if (typeof mqtt === 'undefined') {
     log('⚠️ MQTT.js chưa tải được, sử dụng HTTP SSE Server Fallback.', 'warn');
-    initSSEFallback();
     return;
   }
 
@@ -255,34 +257,41 @@ function initMQTT() {
   }
 }
 
-// Fallback to Server-Sent Events (SSE) if MQTT WS blocked by network
+// Fallback & real-time sync via Server-Sent Events (SSE)
 function initSSEFallback() {
+  if (sseInitialized) return;
   if (typeof EventSource !== "undefined") {
+    sseInitialized = true;
     const evtSource = new EventSource('/events');
     evtSource.onmessage = function(e) {
       try {
         const data = JSON.parse(e.data);
-        updateDataFromESP32(data);
+        if (data.ack) {
+          log(`[FEEDBACK ACK]: Lệnh ${data.ack.command} -> ${data.ack.status} (${data.ack.detail || ''})`, 'ack');
+          if (data.current_telemetry) updateDataFromESP32(data.current_telemetry);
+        } else if (data.current_telemetry) {
+          updateDataFromESP32(data.current_telemetry);
+        } else {
+          updateDataFromESP32(data);
+        }
       } catch (err) {}
     };
   }
 }
 
-// Publish command to MQTT (or HTTP POST fallback)
+// Publish command to both MQTT and server.py (REST API + SSE + Mobile + Wokwi Bridge)
 function sendCommand(cmdObj) {
   const jsonStr = JSON.stringify(cmdObj);
   log(`➡️ [GỬI LỆNH]: ${jsonStr}`, 'info');
 
   if (mqttClient && mqttClient.connected) {
     mqttClient.publish(TOPIC_CONTROL, jsonStr);
-  } else {
-    // HTTP fallback to server.py
-    fetch('/api/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmdObj.command || cmdObj.target })
-    }).catch(() => {});
   }
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: jsonStr
+  }).catch(() => {});
 }
 
 // --- UPDATE METRICS FROM TELEMETRY ---

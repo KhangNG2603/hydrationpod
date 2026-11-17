@@ -195,8 +195,8 @@ Nước nạp an toàn         LED Vàng cảnh báo sớm        LED Đỏ cả
 ### 7.1. Thông số Setting Giao thức MQTT (Multi-Client)
 | Tham số / Setting | ESP32 (`PubSubClient`) | Python Bridge (`paho-mqtt`) | Web Dashboard (`MQTT.js`) | Flutter Mobile (`mqtt_client`) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Broker Host** | `broker.emqx.io` | `broker.emqx.io` | `broker.emqx.io` | `broker.emqx.io` |
-| **Transport & Port** | TCP **`1883`** | TCP **`1883`** | Secure WebSocket **`8084`** (`wss://.../mqtt`) | TCP **`1883`** (REST fallback trên Web) |
+| **Broker Host** | `broker.emqx.io` (hoặc local TLS) | `localhost` (mặc định Mosquitto TLS; tùy chọn `broker.emqx.io`) | `broker.emqx.io` (kèm SSE từ `server.py`) | `broker.emqx.io` (kèm REST từ `server.py`) |
+| **Transport & Port** | TCP **`1883`** (hoặc TLS **`8883`**) | **TLS `8883`** (`MQTT_USE_TLS=1`, `ca.crt`) | Secure WebSocket **`8084`** (`wss://.../mqtt`) | TCP **`1883`** (hoặc TLS **`8883`**) |
 | **Client ID** | `ESP32_HydraPod_<HEX>` | `HydroPod_Server_Bridge_<ts>` | `WebDashboard_<HEX>` | `FlutterPatient_<ts>` |
 | **Keep Alive / Timeout** | `15s` (default) / Retry `4000ms` | `60s` (`loop_forever()`) | `connectTimeout: 5000ms`, `reconnectPeriod: 3000ms` | `keepAlivePeriod: 30s`, `autoReconnect: true` |
 | **Buffer Size** | **`512 Bytes`** (`setBufferSize(512)`) | Không giới hạn | Không giới hạn | Không giới hạn |
@@ -331,7 +331,7 @@ Hoặc cài đặt thủ công từng phần:
 File nhị phân `firmware.bin` và `firmware.elf` sẽ được tạo tại `.pio/build/az-delivery-devkit-v4/`.
 
 ### Bước 2: Chạy Mô Phỏng Wokwi
-- Mở VS Code, nhấn `F1` $\to$ chọn **Wokwi: Start Simulator** (hoặc mở trực tiếp file `diagram.json`).
+- Mở VS Code, nhấn `F1` $\to$ chọn **Wokwi: Start Simulator** (sử dụng [diagram.json](diagram.json) và [wokwi.toml](wokwi.toml) với `rfc2217ServerPort = 4000` để mở cầu nối Serial về `server.py`).
 - Nhìn vào bảng mạch mô phỏng:
   - Cân **HX711** nối GPIO 16, 17.
   - Cảm biến **MPU6050** nối SDA 21, SCL 22.
@@ -339,13 +339,56 @@ File nhị phân `firmware.bin` và `firmware.elf` sẽ được tạo tại `.p
   - Còi **bz1** nối GPIO 4.
   - Màn hình OLED hiển thị `HydraPod [MQTT]` và trạng thái `Vib: ON/OFF`.
 
-### Bước 3: Khởi động Server REST API, Web Dashboard & Mobile App
+### Bước 3: Khởi động Broker Mosquitto TLS, Server REST API, Web Dashboard & Mobile App
 ```bash
-python3 server.py
+# Terminal 1: Khởi động Mosquitto Broker nội bộ (TLS cổng 8883 + ACL)
+mosquitto -c security/mosquitto.local.conf -v
+
+# Terminal 2: Khởi động Server Bridge (mặc định kết nối localhost:8883 TLS)
+.venv/bin/python3 server.py
+# (Nếu muốn dùng Public Broker không TLS: MQTT_BROKER=broker.emqx.io MQTT_PORT=1883 MQTT_USE_TLS=0 .venv/bin/python3 server.py)
+
+# Kiểm tra Mosquitto đang active trên cổng 8883 & xem log realtime:
+pgrep -af mosquitto && ss -tlnp | grep 8883
+tail -f security/logs/mosquitto.log
 ```
-- **Web Dashboard thống nhất**: **[http://localhost:8000](http://localhost:8000)** (giao diện clinical dark, bỏ phân tách trang Bác sĩ / Bệnh nhân)
-- **Flutter Mobile App (`mobile_app/`)**: 3 trang (**Trang chủ**, **Biểu đồ** `CustomPaint` + lưu `shared_preferences`, **Cài đặt** Chỉ thị y tế / Âm báo / Reset) kèm `BackgroundNotificationService` đẩy thông báo khi quên uống nước.
+- **Web Dashboard thống nhất**: **[http://localhost:8000](http://localhost:8000)** (giao diện clinical dark, đồng bộ 2 chiều với Wokwi & Mobile App qua SSE + MQTT).
+- **Flutter Mobile App (`mobile_app/`)**:
+  ```bash
+  # Nếu chạy trên điện thoại Android thật cắm USB, forward cổng 8000:
+  adb reverse tcp:8000 tcp:8000
+  cd mobile_app && flutter pub get && flutter run
+  ```
+  - Gồm 3 trang (**Trang chủ**, **Biểu đồ** `CustomPaint` + lưu `shared_preferences`, **Cài đặt** Chỉ thị y tế / Âm báo / Reset) kèm `BackgroundNotificationService` tự động đẩy thông báo lên điện thoại khi cảnh báo đạt **Mức 2 trở lên (`alert_level >= 2`)**.
 - **Tài liệu API & Web Postman**: **[http://localhost:8000/docs](http://localhost:8000/docs)** / **[http://localhost:8000/api/help](http://localhost:8000/api/help)**
+
+### Bước 3b: Chạy & Xem Cấu Hình Mosquitto MQTT TLS Nội Bộ (`security/`)
+Ngoài broker công cộng `broker.emqx.io:1883`, dự án có sẵn cấu hình **Mosquitto MQTT over TLS (cổng `8883`) + Topic ACL** trong thư mục `security/`:
+
+1. **Xem cấu hình Mosquitto, ACL và Docker Compose**:
+   ```bash
+   cat security/mosquitto.conf   # Cấu hình listener 8883, TLS v1.2, chứng chỉ, log
+   cat security/acl.conf         # Phân quyền topic theo vai trò (ESP32 / Server / Doctor)
+   docker compose -f security/docker-compose.iot-isolated.yml config
+   ```
+2. **Khởi chạy Mosquitto Broker nội bộ bằng Docker Compose**:
+   ```bash
+   # (Tùy chọn) Tạo file passwd nếu chưa có vì mosquitto.conf đặt allow_anonymous false:
+   docker run --rm -v "$PWD/security:/mosquitto/config" eclipse-mosquitto:2.0 \
+     mosquitto_passwd -b -c /mosquitto/config/passwd esp32_hydropod_01 "StrongPass123"
+
+   # Khởi động Mosquitto TLS Broker + API Bridge cô lập mạng:
+   docker compose -f security/docker-compose.iot-isolated.yml up -d
+   ```
+3. **Kiểm tra trạng thái & log cấu hình khi Mosquitto đang chạy**:
+   ```bash
+   docker logs -f hydropod-mqtt-tls          # Xem log kết nối TLS, ACL & publish/subscribe
+   cat security/logs/mosquitto.log           # Xem file log do Mosquitto ghi ra
+   ```
+4. **Hoặc chạy trực tiếp `mosquitto` trên máy (không dùng Docker)**:
+   ```bash
+   mosquitto -c security/mosquitto.local.conf -v   # Chạy verbose để xem chi tiết cấu hình & gói MQTT
+   ```
 
 ### Bước 4: Kiểm thử bằng Phím Tắt Serial Monitor
 Trên cửa sổ Serial Terminal của Wokwi (tốc độ 115200 baud):
@@ -354,6 +397,37 @@ Trên cửa sổ Serial Terminal của Wokwi (tốc độ 115200 baud):
 - Bấm phím `3`: Mô phỏng bệnh nhân suy tim uống vượt trần 1050/1000ml (kích hoạt Rung khẩn cấp + Còi 2500Hz + Pop-up đỏ).
 - Bấm phím `v`: Kiểm thử kích hoạt bộ rung trong 300ms.
 - Bấm phím `r`: Reset bộ đếm ngày về 0.
+
+### Bước 5: Chạy Bộ Kiểm Thử Tự Động (Firmware, Mobile, API & Bảo mật)
+1. **Kiểm thử tích hợp hệ thống (`test_system.py`)** *(chạy sau khi đã bật `mosquitto` và `server.py`)*:
+   ```bash
+   .venv/bin/python3 test_system.py
+   ```
+2. **Kiểm thử Bảo mật API, TLS & Phân tích xu hướng SQLite**:
+   ```bash
+   # Xác minh chứng chỉ TLS nội bộ
+   openssl verify -CAfile security/certs/ca.crt security/certs/server.crt
+
+   # Kiểm tra xác thực X-API-Key (sai key -> 401, đúng key -> 200)
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/api/vibrate -H "X-API-Key: wrong" -d '{}'
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/api/vibrate -H "X-API-Key: hydropod-dev-key-2026" -d '{"duration_ms":300}'
+
+   # Xem phân tích xu hướng uống nước & nhật ký kiểm toán
+   curl -s http://127.0.0.1:8000/api/analytics/trend
+   curl -s http://127.0.0.1:8000/api/audit_logs -H "X-API-Key: hydropod-dev-key-2026"
+   ```
+3. **Kiểm thử Flutter Mobile App (phân tích tĩnh, unit test & chạy trên Android thật)**:
+   ```bash
+   cd mobile_app
+   flutter analyze
+   flutter test
+   flutter devices
+   flutter run
+   ```
+4. **Kiểm tra biên dịch Firmware ESP32 (PlatformIO)**:
+   ```bash
+   ~/.platformio/penv/bin/pio run
+   ```
 
 ---
 
