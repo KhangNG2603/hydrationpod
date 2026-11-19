@@ -355,8 +355,15 @@ tail -f security/logs/mosquitto.log
 - **Web Dashboard thống nhất**: **[http://localhost:8000](http://localhost:8000)** (giao diện clinical dark, đồng bộ 2 chiều với Wokwi & Mobile App qua SSE + MQTT).
 - **Flutter Mobile App (`mobile_app/`)**:
   ```bash
-  # Nếu chạy trên điện thoại Android thật cắm USB, forward cổng 8000:
+  # 1. Cắm cáp USB điện thoại Android (bật USB Debugging) & kiểm tra kết nối:
+  cd ~/Documents/hydrationpod
+  adb devices                       # Phải hiển thị thiết bị ở trạng thái "device"
+
+  # 2. Forward cổng 8000 cho điện thoại & chiếu màn hình điện thoại lên máy tính (tùy chọn):
   adb reverse tcp:8000 tcp:8000
+  scrcpy &
+
+  # 3. Cài thư viện và chạy app trên điện thoại:
   cd mobile_app && flutter pub get && flutter run
   ```
   - Gồm 3 trang (**Trang chủ**, **Biểu đồ** `CustomPaint` + lưu `shared_preferences`, **Cài đặt** Chỉ thị y tế / Âm báo / Reset) kèm `BackgroundNotificationService` tự động đẩy thông báo lên điện thoại khi cảnh báo đạt **Mức 2 trở lên (`alert_level >= 2`)**.

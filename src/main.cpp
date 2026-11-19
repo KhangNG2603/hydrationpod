@@ -594,7 +594,7 @@ void processFSM() {
         // CASE 3: Refill Event (Water poured into bottle, weight increased by >= 40g)
         else if (delta_w <= -40.0) {
           float refilled = -delta_w;
-          current_bottle_ml = min(1000.0f, current_bottle_ml + refilled);
+          current_bottle_ml = min(2000.0f, current_bottle_ml + refilled);
           lastEventLog = "Sensor Refill: +" + String((int)refilled) + "ml";
           Serial.printf("🔵 [SENSOR REFILL DETECTED] Refilled: +%d ml (New Bottle: %d ml)\n",
                         (int)refilled, (int)current_bottle_ml);
@@ -1115,7 +1115,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("refill")) {
     float amt = doc["amount"].as<float>();
     if (amt <= 0) amt = 350.0;
-    current_bottle_ml = min(1000.0f, current_bottle_ml + amt);
+    current_bottle_ml = min(2000.0f, current_bottle_ml + amt);
     lastEventLog = "Remote Refill +" + String((int)amt) + "ml";
     tone(BUZZER_PIN, 800, 150);
     setVibrationPattern(VIBE_REFILL_CONFIRM);
@@ -1151,6 +1151,45 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (doc["remind_min"].is<float>()) base_remind_min = doc["remind_min"].as<float>();
     lastEventLog = "Cloud Config Updated";
     sendAck("SET_CONFIG", "SUCCESS", "Configuration applied");
+  }
+  // 9. Simulate MPU6050 Accelerometer + Gyroscope + FSM Drink Event
+  else if (doc["target"].is<const char*>() && String(doc["target"].as<const char*>()).equalsIgnoreCase("simulate_mpu")) {
+    float pitch = doc["pitch"] | 45.0f;
+    float roll = doc["roll"] | 10.0f;
+    float gyro_dps = doc["gyro_dps"] | 65.0f;
+    float total_acc = doc["total_acc"] | 1.05f;
+    unsigned long dur_ms = doc["duration_ms"] | 1500UL;
+    float delta_ml = doc["delta_ml"] | 150.0f;
+
+    float tilt_deg = max(fabs(pitch), fabs(roll));
+    max_tilt_deg = tilt_deg;
+
+    if (fabs(total_acc - 1.0f) > 1.20f) {
+      impact_detected = true;
+      impact_start_time = millis();
+      fsmState = STATE_IMPACT_REJECTED;
+      lastEventLog = "MPU6050 Impact Rejected (" + String(total_acc, 2) + "G, Gyro " + String((int)gyro_dps) + "dps)";
+      sendAck("MPU_SIM_IMPACT", "REJECTED", lastEventLog.c_str());
+    } else if (tilt_deg > 75.0f || dur_ms < 800) {
+      current_bottle_ml = max(0.0f, current_bottle_ml - delta_ml);
+      fsmState = STATE_REST;
+      lastEventLog = "MPU6050 Spill Detected (Tilt " + String((int)tilt_deg) + "deg, " + String(dur_ms) + "ms)";
+      sendAck("MPU_SIM_SPILL", "WARNING", lastEventLog.c_str());
+    } else if (tilt_deg > 35.0f && dur_ms >= 800 && delta_ml >= 25.0f) {
+      total_drank_today_ml += delta_ml;
+      hourly_intake_ml += delta_ml;
+      current_bottle_ml = max(0.0f, current_bottle_ml - delta_ml);
+      last_intake_timestamp = millis();
+      fsmState = STATE_REST;
+      lastEventLog = "MPU6050 Drink: +" + String((int)delta_ml) + "ml (Tilt " + String((int)tilt_deg) + "deg, Gyro " + String((int)gyro_dps) + "dps)";
+      triggerSingleVibe(90);
+      playBuzzerTone("DRINK");
+      sendAck("MPU_SIM_DRINK", "SUCCESS", lastEventLog.c_str());
+    } else {
+      fsmState = STATE_REST;
+      lastEventLog = "MPU6050 Lift/Noise Ignored (Tilt " + String((int)tilt_deg) + "deg)";
+      sendAck("MPU_SIM_IGNORED", "IGNORED", lastEventLog.c_str());
+    }
   }
   // 7. Raw Command Strings
   else if (doc["command"].is<const char*>()) {

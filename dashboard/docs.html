@@ -216,6 +216,53 @@
     }
     .btn-send:hover { background: var(--primary-hover); }
 
+    .ep-desc-box {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: #e2e8f0;
+      line-height: 1.5;
+    }
+    .ep-desc-box strong {
+      color: #38bdf8;
+    }
+    .demo-cmd-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .demo-cmd-table th, .demo-cmd-table td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .demo-cmd-table th {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .demo-cmd-table tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+      cursor: pointer;
+    }
+    .demo-cmd-code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: #0f172a;
+      color: #7dd3fc;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: inline-block;
+      word-break: break-all;
+    }
+
     .body-header {
       display: flex;
       justify-content: space-between;
@@ -385,6 +432,14 @@
           <span class="method-tag method-post">POST</span>
           <span>Demo 3 (Tràn dịch 1050ml)</span>
         </div>
+        <div class="endpoint-item" onclick="loadEndpoint(11)">
+          <span class="method-tag method-post">POST</span>
+          <span>MPU6050 Uống (Tilt 45° + Gyro)</span>
+        </div>
+        <div class="endpoint-item" onclick="loadEndpoint(12)">
+          <span class="method-tag method-post">POST</span>
+          <span>MPU6050 Va chạm (&gt;2.2G)</span>
+        </div>
       </div>
 
       <!-- Main Request / Response Workspace -->
@@ -399,6 +454,10 @@
             <button class="btn-send" onclick="sendRequest()">
               <span>🚀 Gửi Request (Send)</span>
             </button>
+          </div>
+
+          <div id="ep-desc-box" class="ep-desc-box">
+            <strong>Mô tả:</strong> <span id="ep-desc-text">Lấy toàn bộ thông số Telemetry thời gian thực từ ESP32 & MQTT Bridge.</span>
           </div>
 
           <div id="body-section">
@@ -429,23 +488,73 @@
           </div>
           <pre id="res-body" class="res-body">// Bấm "Gửi Request (Send)" để xem phản hồi thời gian thực từ ESP32 & MQTT Bridge...</pre>
         </div>
+
+        <!-- Quick Demo Command JSON Cheat Sheet -->
+        <div class="panel-card">
+          <div class="response-header" style="margin-bottom: 6px;">
+            <span class="lbl">⚡ BẢNG COMMAND JSON DEMO NHANH (BẤM VÀO DÒNG ĐỂ NẠP LỆNH)</span>
+          </div>
+          <table class="demo-cmd-table">
+            <thead>
+              <tr>
+                <th style="width: 18%;">Kịch bản</th>
+                <th style="width: 36%;">Request JSON</th>
+                <th>Tác dụng khi Demo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="loadEndpoint(8)">
+                <td><strong>Demo 1: Uống hợp lệ</strong></td>
+                <td><span class="demo-cmd-code">{"command": "SIM_DEMO_SCENARIO_1"}</span></td>
+                <td>Cộng <strong>+150ml</strong> đã uống, trừ 150ml trong bình, reset <code>idle_sec = 0</code>, tắt cảnh báo, rung + bíp xác nhận.</td>
+              </tr>
+              <tr onclick="loadEndpoint(9)">
+                <td><strong>Demo 2: Quên uống nước</strong></td>
+                <td><span class="demo-cmd-code">{"command": "SIM_DEMO_SCENARIO_2"}</span></td>
+                <td>Đẩy <code>idle_sec = 35s</code>, <code>alert_level = 2</code> → kích hoạt cảnh báo quên uống Cấp 2 (Rung đôi + còi + thông báo Mobile).</td>
+              </tr>
+              <tr onclick="loadEndpoint(10)">
+                <td><strong>Demo 3: Suy tim vượt trần</strong></td>
+                <td><span class="demo-cmd-code">{"command": "SIM_DEMO_SCENARIO_3"}</span></td>
+                <td>Chuyển <code>HEART_FAILURE</code> (trần 1000ml), đặt đã uống <strong>1050ml</strong> → báo động khẩn cấp (còi 2500Hz + rung liên tục + Pop-up đỏ).</td>
+              </tr>
+              <tr onclick="loadEndpoint(11)">
+                <td><strong>MPU6050: Uống hợp lệ</strong></td>
+                <td><span class="demo-cmd-code">{"pitch": 45, "roll": 10, "gyro_dps": 65, "total_acc": 1.05, "duration_ms": 1500, "delta_ml": 150}</span></td>
+                <td>Mô phỏng cảm biến nghiêng 45° (&gt;35°), giữ 1.5s (≥0.8s) → FSM ghi nhận <code>SENSOR_DRINK</code> (+150ml).</td>
+              </tr>
+              <tr onclick="loadEndpoint(12)">
+                <td><strong>MPU6050: Va chạm / Rơi</strong></td>
+                <td><span class="demo-cmd-code">{"pitch": 20, "roll": 5, "gyro_dps": 180, "total_acc": 2.5, "duration_ms": 400, "delta_ml": 150}</span></td>
+                <td>Gia tốc 2.5G vượt ngưỡng sốc → FSM vào <code>STATE_IMPACT_REJECTED</code>, bỏ qua nhiễu không tính uống.</td>
+              </tr>
+              <tr onclick="loadEndpoint(7)">
+                <td><strong>Reset dữ liệu ngày</strong></td>
+                <td><span class="demo-cmd-code">{}</span> <small style="color:var(--text-muted);">(POST /api/reset)</small></td>
+                <td>Đưa lượng đã uống về <code>0ml</code>, bình về <code>500ml</code>, tắt toàn bộ cảnh báo.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     const endpoints = [
-      { method: 'GET', url: 'http://localhost:8000/api/telemetry', body: '' },
-      { method: 'GET', url: 'http://localhost:8000/api/help', body: '' },
-      { method: 'POST', url: 'http://localhost:8000/api/vibrate', body: JSON.stringify({ duration_ms: 300 }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/drink', body: JSON.stringify({ amount_ml: 150 }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'HEART_FAILURE', hard_cap: 1000 }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'STANDARD', goal: 2000 }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/alarm', body: JSON.stringify({ action: 'MUTE' }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/reset', body: '{}' },
-      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_1' }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_2' }, null, 2) },
-      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_3' }, null, 2) }
+      { method: 'GET', url: 'http://localhost:8000/api/telemetry', body: '', desc: 'Lấy toàn bộ thông số Telemetry thời gian thực từ ESP32 & MQTT Bridge.' },
+      { method: 'GET', url: 'http://localhost:8000/api/help', body: '', desc: 'Xem danh sách toàn bộ REST API Routes đang hoạt động trên server.py.' },
+      { method: 'POST', url: 'http://localhost:8000/api/vibrate', body: JSON.stringify({ duration_ms: 300 }, null, 2), desc: 'Kích hoạt bộ rung Haptic (GPIO 5) trong 300ms để kiểm thử nhắc nhở.' },
+      { method: 'POST', url: 'http://localhost:8000/api/drink', body: JSON.stringify({ amount_ml: 150 }, null, 2), desc: 'Mô phỏng nạp +150ml nước trực tiếp và trừ 150ml trong bình.' },
+      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'HEART_FAILURE', hard_cap: 1000 }, null, 2), desc: 'Chuyển phác đồ Suy Tim với trần cứng Hard Cap = 1000ml/ngày (cảnh báo 80% Vàng, 90% Đỏ).' },
+      { method: 'POST', url: 'http://localhost:8000/api/profile', body: JSON.stringify({ profile: 'STANDARD', goal: 2000 }, null, 2), desc: 'Chuyển về phác đồ Bình thường với mục tiêu 2000ml/ngày.' },
+      { method: 'POST', url: 'http://localhost:8000/api/alarm', body: JSON.stringify({ action: 'MUTE' }, null, 2), desc: 'Tắt còi báo động khẩn cấp và dừng rung trên thiết bị (MUTE / UNMUTE).' },
+      { method: 'POST', url: 'http://localhost:8000/api/reset', body: '{}', desc: 'Reset dữ liệu ngày: đã uống về 0ml, bình về 500ml, tắt toàn bộ cảnh báo.' },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_1' }, null, 2), desc: 'Demo 1 (Uống hợp lệ): Cộng +150ml đã uống, trừ 150ml trong bình, reset idle_sec = 0, tắt cảnh báo, rung + bíp xác nhận.' },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_2' }, null, 2), desc: 'Demo 2 (Quên uống nước): Đẩy idle_sec = 35s, alert_level = 2 → kích hoạt cảnh báo quên uống Cấp 2 (Rung đôi + còi + thông báo Mobile).' },
+      { method: 'POST', url: 'http://localhost:8000/api/command', body: JSON.stringify({ command: 'SIM_DEMO_SCENARIO_3' }, null, 2), desc: 'Demo 3 (Suy tim vượt trần): Chuyển HEART_FAILURE (trần 1000ml), đặt đã uống 1050ml → báo động khẩn cấp (còi 2500Hz + rung liên tục + Pop-up đỏ).' },
+      { method: 'POST', url: 'http://localhost:8000/api/simulate_mpu', body: JSON.stringify({ pitch: 45, roll: 10, gyro_dps: 65, total_acc: 1.05, duration_ms: 1500, delta_ml: 150 }, null, 2), desc: 'MPU6050 Uống hợp lệ: Nghiêng 45° (>35°), giữ 1500ms (≥800ms), giảm 150ml → FSM ghi nhận SENSOR_DRINK.' },
+      { method: 'POST', url: 'http://localhost:8000/api/simulate_mpu', body: JSON.stringify({ pitch: 20, roll: 5, gyro_dps: 180, total_acc: 2.5, duration_ms: 400, delta_ml: 150 }, null, 2), desc: 'MPU6050 Va chạm (>2.2G): Gia tốc 2.5G vượt ngưỡng sốc → FSM vào STATE_IMPACT_REJECTED, bỏ qua nhiễu.' }
     ];
 
     function loadEndpoint(idx) {
@@ -456,6 +565,8 @@
       document.getElementById('req-method').value = ep.method;
       document.getElementById('req-url').value = ep.url;
       document.getElementById('req-body').value = ep.body;
+      const descEl = document.getElementById('ep-desc-text');
+      if (descEl) descEl.innerText = ep.desc || '';
       
       const bodySec = document.getElementById('body-section');
       bodySec.style.display = ep.method === 'GET' ? 'none' : 'block';

@@ -782,9 +782,9 @@
           <div class="vessel-body">
             <div class="vessel-fill" id="vessel-fill" style="height: 100%;"></div>
             <div class="vessel-ticks">
+              <span>1600</span>
+              <span>1000</span>
               <span>400</span>
-              <span>250</span>
-              <span>100</span>
             </div>
           </div>
         </div>
@@ -793,7 +793,7 @@
           <div style="font-size: 12px; color: var(--text-sub);">Nước còn trong bình</div>
           <div>
             <span class="bottle-vol" id="bottle-val">500</span>
-            <span style="font-size: 13px; color: var(--text-muted); font-weight: 700;">/ 500 ml</span>
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 700;">/ 2000 ml</span>
           </div>
           <div class="bottle-sub" id="bottle-sub">Đủ cho khoảng 4 lần uống (150ml/lần)</div>
         </div>
@@ -1007,7 +1007,7 @@
       document.getElementById('bat-top').innerText = '🔋 ' + state.bat + '%';
 
       // Bottle
-      const bPct = Math.max(0, Math.min(100, (state.bottle / 500) * 100));
+      const bPct = Math.max(0, Math.min(100, (state.bottle / 2000) * 100));
       const fill = document.getElementById('vessel-fill');
       fill.style.height = bPct + '%';
       fill.classList.toggle('low', state.is_empty);
@@ -1029,10 +1029,17 @@
 
     async function drinkWater(amt) {
       playTone(state.ringtone);
-      await fetch('/api/drink', {
+      await fetch('/api/simulate_mpu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount_ml: amt })
+        body: JSON.stringify({
+          pitch: 45,
+          roll: 10,
+          gyro_dps: 65,
+          total_acc: 1.05,
+          duration_ms: 1500,
+          delta_ml: amt
+        })
       });
     }
 

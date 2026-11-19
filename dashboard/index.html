@@ -71,23 +71,6 @@
               </div>
               <div class="val-pct-badge" id="val-pct">20.0%</div>
             </div>
-
-            <!-- Visual Water Reservoir (Mô hình bình nước 500ml trực quan) -->
-            <div class="reservoir-box" title="Mực nước còn lại trong bình (HX711 Load Cell)">
-              <div class="reservoir-cylinder">
-                <div class="reservoir-fluid" id="res-fluid" style="height: 100%;">
-                  <div class="reservoir-wave"></div>
-                </div>
-                <div class="reservoir-ticks">
-                  <span>500</span>
-                  <span>375</span>
-                  <span>250</span>
-                  <span>125</span>
-                  <span>0</span>
-                </div>
-              </div>
-              <div class="reservoir-lbl">Bình 500ml</div>
-            </div>
           </div>
 
           <!-- Progress Bar & Dual Safety Markers (80% Yellow, 90% Red, 100% Emergency) -->
@@ -141,8 +124,8 @@
             </div>
           </div>
 
-          <!-- Slider: Adjust Hard Cap (Lab 4: Widget Slider) -->
-          <div class="control-group slider-group">
+          <!-- Slider: Adjust Hard Cap (Lab 4: Widget Slider - Chỉ hiện khi chọn Suy Tim) -->
+          <div class="control-group slider-group" id="hard-cap-group" style="display: none;">
             <div class="slider-header">
               <label class="control-lbl">2. Hạn Mức Trần Y Tế (Hard Cap V<sub>cap</sub>):</label>
               <span class="slider-val" id="slider-val-txt">1000 ml</span>

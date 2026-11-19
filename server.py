@@ -503,6 +503,7 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                     {"method": "POST", "url": "http://localhost:8000/api/profile", "body": {"profile": "HEART_FAILURE", "hard_cap": 1000}, "desc": "Chỉ định phác đồ y tế (STANDARD, HEART_FAILURE, GOUT)"},
                     {"method": "POST", "url": "http://localhost:8000/api/alarm", "body": {"action": "MUTE"}, "desc": "Tắt/bật chuông cảnh báo (MUTE/UNMUTE)"},
                     {"method": "POST", "url": "http://localhost:8000/api/vibrate", "body": {"duration_ms": 300}, "desc": "Kích hoạt kiểm thử bộ rung nhắc nhở (Haptic Vibration Motor)"},
+                    {"method": "POST", "url": "http://localhost:8000/api/simulate_mpu", "body": {"pitch": 45, "roll": 10, "gyro_dps": 65, "total_acc": 1.05, "duration_ms": 1500, "delta_ml": 150}, "desc": "Mô phỏng uống nước qua cảm biến MPU6050 (Accelerometer + Gyroscope + FSM)"},
                     {"method": "POST", "url": "http://localhost:8000/api/reset", "body": {}, "desc": "Reset dữ liệu nạp dịch ngày"}
                 ]
             }
@@ -634,7 +635,7 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
                 publish_to_mqtt({"target": "reset"})
             elif target == 'refill' or cmd == 'refill':
                 amt = float(body_json.get('amount', body_json.get('amount_ml', 350)))
-                latest_telemetry['bottle_ml'] = min(1000, latest_telemetry['bottle_ml'] + amt)
+                latest_telemetry['bottle_ml'] = min(2000, latest_telemetry['bottle_ml'] + amt)
                 latest_telemetry['last_event'] = f'Refilled +{int(amt)}ml'
                 publish_to_mqtt({"target": "refill", "amount": amt})
             elif target == 'profile':
@@ -775,7 +776,7 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
         # 6. POST /api/refill
         elif self.path.startswith('/api/refill'):
             amount = float(body_json.get('amount_ml', body_json.get('amount', 350)))
-            latest_telemetry['bottle_ml'] = min(1000, latest_telemetry['bottle_ml'] + amount)
+            latest_telemetry['bottle_ml'] = min(2000, latest_telemetry['bottle_ml'] + amount)
             latest_telemetry['last_event'] = f"Refilled +{int(amount)}ml"
             evaluate_safety()
             publish_to_mqtt({"target": "refill", "amount": amount})
@@ -832,6 +833,61 @@ class PostmanAPIHandler(http.server.SimpleHTTPRequestHandler):
             publish_to_mqtt({"target": "reset"})
             broadcast_sse(latest_telemetry)
             response_data = {"status": "success", "message": "Daily stats reset", "mqtt_published": True}
+
+        # 10. POST /api/simulate_mpu (MPU6050 Accelerometer + Gyroscope + FSM Simulation)
+        elif self.path.startswith('/api/simulate_mpu'):
+            pitch = float(body_json.get('pitch', 45.0))
+            roll = float(body_json.get('roll', 10.0))
+            gyro_dps = float(body_json.get('gyro_dps', 65.0))
+            total_acc = float(body_json.get('total_acc', 1.05))
+            dur_ms = int(body_json.get('duration_ms', 1500))
+            delta_ml = float(body_json.get('delta_ml', 150.0))
+
+            tilt_deg = max(abs(pitch), abs(roll))
+            if abs(total_acc - 1.0) > 1.20:
+                fsm_result = "STATE_IMPACT_REJECTED"
+                latest_telemetry['last_event'] = f"MPU6050 Impact Rejected ({total_acc:.2f}G, Gyro {int(gyro_dps)}dps)"
+            elif tilt_deg > 75.0 or dur_ms < 800:
+                fsm_result = "SENSOR_SPILL"
+                latest_telemetry['bottle_ml'] = max(0, latest_telemetry['bottle_ml'] - delta_ml)
+                latest_telemetry['last_event'] = f"MPU6050 Spill Detected (Tilt {int(tilt_deg)}°, {dur_ms}ms)"
+            elif tilt_deg > 35.0 and dur_ms >= 800 and delta_ml >= 25.0:
+                fsm_result = "SENSOR_DRINK"
+                latest_telemetry['drank_today_ml'] += delta_ml
+                latest_telemetry['bottle_ml'] = max(0, latest_telemetry['bottle_ml'] - delta_ml)
+                latest_telemetry['idle_sec'] = 0
+                latest_telemetry['alert_level'] = 0
+                latest_telemetry['last_event'] = f"MPU6050 Drink: +{int(delta_ml)}ml (Tilt {int(tilt_deg)}°, Gyro {int(gyro_dps)}dps)"
+            else:
+                fsm_result = "NOISE_IGNORED"
+                latest_telemetry['last_event'] = f"MPU6050 Lift/Noise Ignored (Tilt {int(tilt_deg)}°)"
+
+            evaluate_safety()
+            latest_telemetry['progress_pct'] = round((latest_telemetry['drank_today_ml'] / max(1, latest_telemetry['goal_ml'])) * 100, 1)
+            publish_to_mqtt({
+                "target": "simulate_mpu",
+                "pitch": pitch,
+                "roll": roll,
+                "gyro_dps": gyro_dps,
+                "total_acc": total_acc,
+                "duration_ms": dur_ms,
+                "delta_ml": delta_ml,
+            })
+            broadcast_sse(latest_telemetry)
+            response_data = {
+                "status": "success",
+                "fsm_result": fsm_result,
+                "mpu6050": {
+                    "pitch_deg": pitch,
+                    "roll_deg": roll,
+                    "gyro_dps": gyro_dps,
+                    "total_acc_g": total_acc,
+                    "duration_ms": dur_ms,
+                    "delta_ml": delta_ml,
+                },
+                "mqtt_published": True,
+                "current_telemetry": latest_telemetry,
+            }
 
         else:
             response_data = {"status": "error", "message": "Endpoint not found"}

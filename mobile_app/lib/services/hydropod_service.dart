@@ -211,14 +211,22 @@ class HydropodService extends ChangeNotifier {
     }
   }
 
-  /// Patient records a sip / drink (+150ml default)
+  /// Patient records a sip / drink (+150ml default) via MPU6050 FSM API
   Future<void> drinkWater([int amountMl = 150]) async {
-    _publishMqttJson({'target': 'drink', 'amount': amountMl});
+    final payload = {
+      'pitch': 45,
+      'roll': 10,
+      'gyro_dps': 65,
+      'total_acc': 1.05,
+      'duration_ms': 1500,
+      'delta_ml': amountMl,
+    };
+    _publishMqttJson({'target': 'simulate_mpu', ...payload});
     try {
       await http.post(
-        Uri.parse('$_apiBaseUrl/api/drink'),
+        Uri.parse('$_apiBaseUrl/api/simulate_mpu'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'amount_ml': amountMl}),
+        body: jsonEncode(payload),
       );
       await fetchTelemetryRest();
     } catch (_) {}

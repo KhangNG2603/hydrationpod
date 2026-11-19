@@ -357,7 +357,7 @@ function updateUI() {
   // Visual Water Reservoir Animation (HX711 Load Cell)
   const resFluid = document.getElementById('res-fluid');
   if (resFluid) {
-    const fluidPct = Math.max(0, Math.min(100, (state.bottle / 500) * 100));
+    const fluidPct = Math.max(0, Math.min(100, (state.bottle / 2000) * 100));
     resFluid.style.height = fluidPct + '%';
     if (state.bottle <= 40) {
       resFluid.style.background = 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)';
@@ -453,6 +453,19 @@ function updateUI() {
     document.getElementById('btn-heart').classList.add('active');
   } else if (state.profile === 'GOUT' && document.getElementById('btn-gout')) {
     document.getElementById('btn-gout').classList.add('active');
+  }
+
+  // Show Hard Cap slider widget only when HEART_FAILURE profile is active
+  const hardCapGroup = document.getElementById('hard-cap-group');
+  if (hardCapGroup) {
+    const isHeartFailure = state.profile === 'HEART_FAILURE';
+    hardCapGroup.style.display = isHeartFailure ? '' : 'none';
+    if (isHeartFailure && state.cap > 0) {
+      const capSlider = document.getElementById('cap-slider');
+      const capTxt = document.getElementById('slider-val-txt');
+      if (capSlider) capSlider.value = state.cap;
+      if (capTxt) capTxt.innerText = `${Math.round(state.cap)} ml`;
+    }
   }
 
   // Update ringtone buttons active state
@@ -572,7 +585,7 @@ function testVibration() {
 }
 
 function refillBottle(amount = 350) {
-  state.bottle = Math.min(500, state.bottle + amount);
+  state.bottle = Math.min(2000, state.bottle + amount);
   state.has_alerted_empty = false;
   log(`💧 [CHÂM NƯỚC]: Đã nạp thêm +${amount}ml nước vào bình (Tổng bình: ${Math.round(state.bottle)}ml).`, 'info');
   playTone(900, 'sine', 0.15);
@@ -634,12 +647,37 @@ function handleMp3Upload(event) {
 // --- DEMO SCENARIOS ---
 function runDemo(n) {
   if (n === 1) {
-    state.drank += 150;
-    state.bottle = Math.max(0, state.bottle - 150);
-    state.idle_sec = 0;
-    state.alert_level = 0;
-    sendCommand({ target: 'drink', amount: 150 });
-    addChartPoint(state.drank);
+    const mpuPayload = {
+      pitch: 45,
+      roll: 10,
+      gyro_dps: 65,
+      total_acc: 1.05,
+      duration_ms: 1500,
+      delta_ml: 150,
+    };
+    log(`➡️ [MPU6050 API /api/simulate_mpu]: ${JSON.stringify(mpuPayload)}`, 'info');
+    fetch('/api/simulate_mpu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mpuPayload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.current_telemetry) {
+          updateDataFromESP32(data.current_telemetry);
+        }
+        if (data && data.fsm_result) {
+          log(`✅ [MPU6050 FSM]: ${data.fsm_result} (+${mpuPayload.delta_ml}ml, Tilt ${mpuPayload.pitch}°, Gyro ${mpuPayload.gyro_dps}dps)`, 'ok');
+        }
+      })
+      .catch(() => {
+        state.drank += 150;
+        state.bottle = Math.max(0, state.bottle - 150);
+        state.idle_sec = 0;
+        state.alert_level = 0;
+        addChartPoint(state.drank);
+        updateUI();
+      });
     playTone(1046, 'sine', 0.2);
   } else if (n === 2) {
     state.idle_sec = 35;
